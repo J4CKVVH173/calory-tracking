@@ -17,9 +17,9 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAuth } from '@/lib/auth-context'
 import { getProfileByUserId, saveProfile, saveWeightEntry } from '@/lib/api-storage'
-import type { UserProfile } from '@/lib/types'
+import type { UserProfile, NutritionGoals } from '@/lib/types'
 import { lifestyleOptions, genderOptions } from '@/lib/types'
-import { Loader2, Save, Sparkles, Pencil, Check, X } from 'lucide-react'
+import { Loader2, Save, Sparkles, Pencil, Check, X, Target } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 
 export function ProfileForm() {
@@ -27,8 +27,11 @@ export function ProfileForm() {
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [aiPlan, setAiPlan] = useState<string | null>(null)
+  const [nutritionGoals, setNutritionGoals] = useState<NutritionGoals | null>(null)
   const [isEditingPlan, setIsEditingPlan] = useState(false)
+  const [isEditingGoals, setIsEditingGoals] = useState(false)
   const [editedPlan, setEditedPlan] = useState('')
+  const [editedGoals, setEditedGoals] = useState<NutritionGoals>({ calories: 0, protein: 0, fat: 0, carbs: 0 })
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [formData, setFormData] = useState({
     age: '',
@@ -59,6 +62,9 @@ export function ProfileForm() {
             if (profile.aiPlan) {
               setAiPlan(profile.aiPlan)
             }
+            if (profile.nutritionGoals) {
+              setNutritionGoals(profile.nutritionGoals)
+            }
           }
         } catch (error) {
           console.error('[v0] Error loading profile:', error)
@@ -72,7 +78,7 @@ export function ProfileForm() {
     loadProfile()
   }, [user])
 
-  const saveProfileData = useCallback(async (planToSave?: string) => {
+  const saveProfileData = useCallback(async (planToSave?: string, goalsToSave?: NutritionGoals) => {
     if (!user) return
     
     const profile: UserProfile = {
@@ -84,10 +90,11 @@ export function ProfileForm() {
       goal: formData.goal,
       lifestyle: formData.lifestyle,
       aiPlan: planToSave ?? aiPlan ?? undefined,
+      nutritionGoals: goalsToSave ?? nutritionGoals ?? undefined,
       updatedAt: new Date().toISOString(),
     }
     await saveProfile(profile)
-  }, [user, formData, aiPlan])
+  }, [user, formData, aiPlan, nutritionGoals])
 
   const handleSaveProfile = async () => {
     if (!user) return
@@ -132,6 +139,22 @@ export function ProfileForm() {
     setIsEditingPlan(true)
   }
 
+  const handleStartEditGoals = () => {
+    setEditedGoals(nutritionGoals || { calories: 0, protein: 0, fat: 0, carbs: 0 })
+    setIsEditingGoals(true)
+  }
+
+  const handleSaveGoals = async () => {
+    setNutritionGoals(editedGoals)
+    await saveProfileData(undefined, editedGoals)
+    setIsEditingGoals(false)
+  }
+
+  const handleCancelEditGoals = () => {
+    setEditedGoals(nutritionGoals || { calories: 0, protein: 0, fat: 0, carbs: 0 })
+    setIsEditingGoals(false)
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!user) return
@@ -159,6 +182,7 @@ export function ProfileForm() {
       }
 
       const plan = data.plan
+      const goals = data.nutritionGoals as NutritionGoals
 
       const profile: UserProfile = {
         userId: user.id,
@@ -169,10 +193,12 @@ export function ProfileForm() {
         goal: formData.goal,
         lifestyle: formData.lifestyle,
         aiPlan: plan,
+        nutritionGoals: goals,
         updatedAt: new Date().toISOString(),
       }
 
       await saveProfile(profile)
+      setNutritionGoals(goals)
 
       // Save initial weight entry for chart visualization
       await saveWeightEntry({
@@ -333,6 +359,106 @@ export function ProfileForm() {
         </CardContent>
       </Card>
 
+      {nutritionGoals && (
+        <Card className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <CardHeader className="flex flex-row items-start justify-between space-y-0">
+            <div className="space-y-1">
+              <CardTitle className="flex items-center gap-2">
+                <Target className="h-5 w-5 text-primary" />
+                Цели питания
+              </CardTitle>
+              <CardDescription>
+                Дневные нормы макронутриентов
+              </CardDescription>
+            </div>
+            {!isEditingGoals ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleStartEditGoals}
+                className="bg-transparent"
+              >
+                <Pencil className="h-4 w-4 mr-1" />
+                Изменить
+              </Button>
+            ) : (
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCancelEditGoals}
+                  className="bg-transparent"
+                >
+                  <X className="h-4 w-4 mr-1" />
+                  Отмена
+                </Button>
+                <Button size="sm" onClick={handleSaveGoals}>
+                  <Check className="h-4 w-4 mr-1" />
+                  Сохранить
+                </Button>
+              </div>
+            )}
+          </CardHeader>
+          <CardContent>
+            {isEditingGoals ? (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Калории (ккал)</Label>
+                  <Input
+                    type="number"
+                    value={editedGoals.calories}
+                    onChange={(e) => setEditedGoals({ ...editedGoals, calories: Number(e.target.value) })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Белки (г)</Label>
+                  <Input
+                    type="number"
+                    value={editedGoals.protein}
+                    onChange={(e) => setEditedGoals({ ...editedGoals, protein: Number(e.target.value) })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Жиры (г)</Label>
+                  <Input
+                    type="number"
+                    value={editedGoals.fat}
+                    onChange={(e) => setEditedGoals({ ...editedGoals, fat: Number(e.target.value) })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Углеводы (г)</Label>
+                  <Input
+                    type="number"
+                    value={editedGoals.carbs}
+                    onChange={(e) => setEditedGoals({ ...editedGoals, carbs: Number(e.target.value) })}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div className="text-center p-4 rounded-lg bg-orange-500/10 border border-orange-500/20">
+                  <div className="text-2xl font-bold text-orange-600">{nutritionGoals.calories}</div>
+                  <div className="text-sm text-muted-foreground">ккал</div>
+                </div>
+                <div className="text-center p-4 rounded-lg bg-red-500/10 border border-red-500/20">
+                  <div className="text-2xl font-bold text-red-600">{nutritionGoals.protein}г</div>
+                  <div className="text-sm text-muted-foreground">белки</div>
+                </div>
+                <div className="text-center p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+                  <div className="text-2xl font-bold text-yellow-600">{nutritionGoals.fat}г</div>
+                  <div className="text-sm text-muted-foreground">жиры</div>
+                </div>
+                <div className="text-center p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
+                  <div className="text-2xl font-bold text-blue-600">{nutritionGoals.carbs}г</div>
+                  <div className="text-sm text-muted-foreground">углеводы</div>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {aiPlan && (
         <Card className="animate-in fade-in slide-in-from-bottom-4 duration-500">
           <CardHeader className="flex flex-row items-start justify-between space-y-0">
@@ -382,9 +508,7 @@ export function ProfileForm() {
                 placeholder="Введите ваш план в формате Markdown..."
               />
             ) : (
-              <div className="prose prose-sm dark:prose-invert max-w-none prose-headings:text-foreground prose-p:text-foreground prose-strong:text-foreground prose-li:text-foreground prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5">
-                <ReactMarkdown>{aiPlan}</ReactMarkdown>
-              </div>
+              <div className="text-sm whitespace-pre-wrap">{aiPlan}</div>
             )}
           </CardContent>
         </Card>

@@ -5,6 +5,13 @@ export interface User {
   createdAt: string
 }
 
+export interface NutritionGoals {
+  calories: number
+  protein: number
+  fat: number
+  carbs: number
+}
+
 export interface UserProfile {
   userId: string
   age: number
@@ -14,6 +21,7 @@ export interface UserProfile {
   goal: string
   lifestyle: 'sedentary' | 'light' | 'moderate' | 'active' | 'very_active'
   aiPlan?: string
+  nutritionGoals?: NutritionGoals
   updatedAt: string
 }
 

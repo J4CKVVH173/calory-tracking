@@ -27,46 +27,54 @@ export function TodayStats({ logs, profile }: TodayStatsProps) {
     { calories: 0, protein: 0, fat: 0, carbs: 0 }
   )
 
-  // Extract target calories from AI plan if available
-  let targetCalories = 2000 // Default
-  if (profile?.aiPlan) {
-    const match = profile.aiPlan.match(/(\d{4})\s*(ккал|калор)/i)
-    if (match) {
-      targetCalories = Number.parseInt(match[1])
-    }
+  // Use nutrition goals from profile, fallback to defaults
+  const goals = profile?.nutritionGoals || {
+    calories: 2000,
+    protein: 150,
+    fat: 65,
+    carbs: 250,
   }
 
-  const calorieProgress = Math.min((totals.calories / targetCalories) * 100, 100)
-
-  const stats = [
+  const macros = [
     {
       label: 'Калории',
-      value: totals.calories,
+      current: Math.round(totals.calories),
+      target: goals.calories,
       unit: 'ккал',
-      target: targetCalories,
       icon: Flame,
-      color: 'text-orange-500',
+      color: 'bg-orange-500',
+      bgColor: 'bg-orange-500/20',
+      textColor: 'text-orange-600',
     },
     {
       label: 'Белки',
-      value: totals.protein.toFixed(1),
+      current: Math.round(totals.protein),
+      target: goals.protein,
       unit: 'г',
       icon: Beef,
-      color: 'text-red-500',
+      color: 'bg-red-500',
+      bgColor: 'bg-red-500/20',
+      textColor: 'text-red-600',
     },
     {
       label: 'Жиры',
-      value: totals.fat.toFixed(1),
+      current: Math.round(totals.fat),
+      target: goals.fat,
       unit: 'г',
       icon: Droplet,
-      color: 'text-yellow-500',
+      color: 'bg-yellow-500',
+      bgColor: 'bg-yellow-500/20',
+      textColor: 'text-yellow-600',
     },
     {
       label: 'Углеводы',
-      value: totals.carbs.toFixed(1),
+      current: Math.round(totals.carbs),
+      target: goals.carbs,
       unit: 'г',
       icon: Cookie,
-      color: 'text-blue-500',
+      color: 'bg-blue-500',
+      bgColor: 'bg-blue-500/20',
+      textColor: 'text-blue-600',
     },
   ]
 
@@ -75,35 +83,60 @@ export function TodayStats({ logs, profile }: TodayStatsProps) {
       <CardHeader>
         <CardTitle>Сегодня</CardTitle>
         <CardDescription>
-          Ваши текущие показатели за{' '}
+          Ваши показатели за{' '}
           {new Date().toLocaleDateString('ru-RU', {
             day: 'numeric',
             month: 'long',
           })}
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-sm">
-            <span>Калории</span>
-            <span className="font-medium">
-              {totals.calories} / {targetCalories} ккал
-            </span>
-          </div>
-          <Progress value={calorieProgress} className="h-3" />
-        </div>
+      <CardContent className="space-y-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {macros.map((macro) => {
+            const Icon = macro.icon
+            const progress = Math.min((macro.current / macro.target) * 100, 100)
+            const remaining = macro.target - macro.current
+            const isOver = remaining < 0
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {stats.map((stat) => {
-            const Icon = stat.icon
             return (
               <div
-                key={stat.label}
-                className="flex flex-col items-center p-3 rounded-lg bg-muted/50"
+                key={macro.label}
+                className={`p-4 rounded-xl ${macro.bgColor}`}
               >
-                <Icon className={`h-5 w-5 mb-1 ${stat.color}`} />
-                <span className="text-lg font-bold">{stat.value}</span>
-                <span className="text-xs text-muted-foreground">{stat.unit}</span>
+                <div className="flex items-center gap-2 mb-3">
+                  <Icon className={`h-5 w-5 ${macro.textColor}`} />
+                  <span className={`font-medium ${macro.textColor}`}>{macro.label}</span>
+                </div>
+                
+                <div className="space-y-2">
+                  <div className="flex items-end justify-between">
+                    <span className={`text-2xl font-bold ${macro.textColor}`}>
+                      {macro.current}
+                    </span>
+                    <span className="text-sm text-muted-foreground">
+                      / {macro.target} {macro.unit}
+                    </span>
+                  </div>
+                  
+                  <div className="h-2 rounded-full bg-background/50 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${macro.color}`}
+                      style={{ width: `${progress}%` }}
+                    />
+                  </div>
+                  
+                  <div className="text-xs text-muted-foreground">
+                    {isOver ? (
+                      <span className="text-destructive font-medium">
+                        Превышено на {Math.abs(remaining)} {macro.unit}
+                      </span>
+                    ) : remaining === 0 ? (
+                      <span className="text-primary font-medium">Цель достигнута!</span>
+                    ) : (
+                      <span>Осталось: {remaining} {macro.unit}</span>
+                    )}
+                  </div>
+                </div>
               </div>
             )
           })}
@@ -111,7 +144,13 @@ export function TodayStats({ logs, profile }: TodayStatsProps) {
 
         {todayLogs.length === 0 && (
           <p className="text-sm text-muted-foreground text-center py-2">
-            Записей за сегодня пока нет
+            Записей за сегодня пока нет. Добавьте еду в разделе Питание.
+          </p>
+        )}
+
+        {!profile?.nutritionGoals && (
+          <p className="text-sm text-muted-foreground text-center py-2 bg-muted/50 rounded-lg">
+            Заполните профиль и получите план от AI для персональных целей питания.
           </p>
         )}
       </CardContent>
