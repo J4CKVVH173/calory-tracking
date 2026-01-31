@@ -60,3 +60,16 @@ export const genderOptions = [
   { value: 'male', label: 'Мужской' },
   { value: 'female', label: 'Женский' },
 ] as const
+
+export interface BodyMeasurement {
+  id: string
+  userId: string
+  weight: number
+  height: number
+  waist: number
+  neck: number
+  hips?: number // Required for women
+  bodyFatPercentage: number
+  date: string
+  createdAt: string
+}

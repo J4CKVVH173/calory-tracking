@@ -5,13 +5,14 @@ import { usePathname, useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/lib/auth-context'
 import { cn } from '@/lib/utils'
-import { Home, User, Utensils, LogOut, Menu, X } from 'lucide-react'
+import { Home, User, Utensils, LogOut, Menu, X, Activity } from 'lucide-react'
 import { useState } from 'react'
 
 const navItems = [
   { href: '/dashboard', label: 'Главная', icon: Home },
   { href: '/profile', label: 'Профиль', icon: User },
   { href: '/food', label: 'Питание', icon: Utensils },
+  { href: '/body', label: 'Состав тела', icon: Activity },
 ]
 
 export function Navigation() {
