@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { FoodInput } from '@/components/food/food-input'
 import { FoodLogList } from '@/components/food/food-log-list'
 import { useAuth } from '@/lib/auth-context'
-import { getFoodLogsByUserId } from '@/lib/storage'
+import { getFoodLogsByUserId } from '@/lib/api-storage'
 import type { FoodLog } from '@/lib/types'
 import { Loader2 } from 'lucide-react'
 
@@ -15,9 +15,9 @@ export default function FoodPage() {
   const [logs, setLogs] = useState<FoodLog[]>([])
   const [refreshKey, setRefreshKey] = useState(0)
 
-  const loadLogs = useCallback(() => {
+  const loadLogs = useCallback(async () => {
     if (user) {
-      const userLogs = getFoodLogsByUserId(user.id)
+      const userLogs = await getFoodLogsByUserId(user.id)
       setLogs(userLogs)
     }
   }, [user])

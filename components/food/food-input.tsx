@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAuth } from '@/lib/auth-context'
-import { saveFoodLog } from '@/lib/storage'
+import { saveFoodLog } from '@/lib/api-storage'
 import type { FoodItem, FoodLog } from '@/lib/types'
 import { Loader2, Plus } from 'lucide-react'
 
@@ -53,7 +53,7 @@ export function FoodInput({ onFoodAdded }: FoodInputProps) {
     }
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!parsedItems || !user) return
 
     const foodLog: FoodLog = {
@@ -65,7 +65,7 @@ export function FoodInput({ onFoodAdded }: FoodInputProps) {
       createdAt: new Date().toISOString(),
     }
 
-    saveFoodLog(foodLog)
+    await saveFoodLog(foodLog)
     setInput('')
     setParsedItems(null)
     onFoodAdded()

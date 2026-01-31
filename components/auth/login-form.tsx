@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAuth } from '@/lib/auth-context'
-import { getUserByUsername, saveUser } from '@/lib/storage'
+import { getUserByUsername, saveUser } from '@/lib/api-storage'
 import { useRouter } from 'next/navigation'
 
 export function LoginForm() {
@@ -38,7 +38,8 @@ export function LoginForm() {
           setIsLoading(false)
           return
         }
-        if (getUserByUsername(username)) {
+        const existingUser = await getUserByUsername(username)
+        if (existingUser) {
           setError('Пользователь с таким именем уже существует')
           setIsLoading(false)
           return
@@ -57,11 +58,11 @@ export function LoginForm() {
           return
         }
 
-        saveUser(data.user)
-        login(data.user.id)
+        await saveUser(data.user)
+        await login(data.user.id)
         router.push('/profile')
       } else {
-        const existingUser = getUserByUsername(username)
+        const existingUser = await getUserByUsername(username)
         if (!existingUser) {
           setError('Пользователь не найден')
           setIsLoading(false)
@@ -81,7 +82,7 @@ export function LoginForm() {
           return
         }
 
-        login(existingUser.id)
+        await login(existingUser.id)
         router.push('/dashboard')
       }
     } catch {

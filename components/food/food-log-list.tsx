@@ -3,7 +3,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import type { FoodLog } from '@/lib/types'
-import { deleteFoodLog } from '@/lib/storage'
+import { deleteFoodLog } from '@/lib/api-storage'
 import { Trash2, Utensils } from 'lucide-react'
 
 interface FoodLogListProps {
@@ -12,8 +12,8 @@ interface FoodLogListProps {
 }
 
 export function FoodLogList({ logs, onDelete }: FoodLogListProps) {
-  const handleDelete = (logId: string) => {
-    deleteFoodLog(logId)
+  const handleDelete = async (logId: string) => {
+    await deleteFoodLog(logId)
     onDelete()
   }
 

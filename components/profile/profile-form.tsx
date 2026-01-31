@@ -2,7 +2,7 @@
 
 import React from "react"
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -16,15 +16,20 @@ import {
 } from '@/components/ui/select'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAuth } from '@/lib/auth-context'
-import { getProfileByUserId, saveProfile, saveWeightEntry } from '@/lib/storage'
+import { getProfileByUserId, saveProfile, saveWeightEntry } from '@/lib/api-storage'
 import type { UserProfile } from '@/lib/types'
 import { lifestyleOptions, genderOptions } from '@/lib/types'
-import { Loader2 } from 'lucide-react'
+import { Loader2, Save, Sparkles, Pencil, Check, X } from 'lucide-react'
+import ReactMarkdown from 'react-markdown'
 
 export function ProfileForm() {
   const { user } = useAuth()
   const [isLoading, setIsLoading] = useState(false)
+  const [isSaving, setIsSaving] = useState(false)
   const [aiPlan, setAiPlan] = useState<string | null>(null)
+  const [isEditingPlan, setIsEditingPlan] = useState(false)
+  const [editedPlan, setEditedPlan] = useState('')
+  const [saveSuccess, setSaveSuccess] = useState(false)
   const [formData, setFormData] = useState({
     age: '',
     gender: 'male' as 'male' | 'female',
@@ -34,24 +39,98 @@ export function ProfileForm() {
     lifestyle: 'moderate' as UserProfile['lifestyle'],
   })
 
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true)
+
   useEffect(() => {
-    if (user) {
-      const profile = getProfileByUserId(user.id)
-      if (profile) {
-        setFormData({
-          age: profile.age.toString(),
-          gender: profile.gender,
-          weight: profile.weight.toString(),
-          height: profile.height.toString(),
-          goal: profile.goal,
-          lifestyle: profile.lifestyle,
-        })
-        if (profile.aiPlan) {
-          setAiPlan(profile.aiPlan)
+    async function loadProfile() {
+      if (user) {
+        setIsLoadingProfile(true)
+        try {
+          const profile = await getProfileByUserId(user.id)
+          if (profile) {
+            setFormData({
+              age: profile.age.toString(),
+              gender: profile.gender,
+              weight: profile.weight.toString(),
+              height: profile.height.toString(),
+              goal: profile.goal,
+              lifestyle: profile.lifestyle,
+            })
+            if (profile.aiPlan) {
+              setAiPlan(profile.aiPlan)
+            }
+          }
+        } catch (error) {
+          console.error('[v0] Error loading profile:', error)
+        } finally {
+          setIsLoadingProfile(false)
         }
+      } else {
+        setIsLoadingProfile(false)
       }
     }
+    loadProfile()
   }, [user])
+
+  const saveProfileData = useCallback(async (planToSave?: string) => {
+    if (!user) return
+    
+    const profile: UserProfile = {
+      userId: user.id,
+      age: Number.parseInt(formData.age) || 0,
+      gender: formData.gender,
+      weight: Number.parseFloat(formData.weight) || 0,
+      height: Number.parseFloat(formData.height) || 0,
+      goal: formData.goal,
+      lifestyle: formData.lifestyle,
+      aiPlan: planToSave ?? aiPlan ?? undefined,
+      updatedAt: new Date().toISOString(),
+    }
+    await saveProfile(profile)
+  }, [user, formData, aiPlan])
+
+  const handleSaveProfile = async () => {
+    if (!user) return
+    setIsSaving(true)
+    
+    try {
+      await saveProfileData()
+      
+      // Save weight entry if weight changed
+      const existingProfile = await getProfileByUserId(user.id)
+      if (!existingProfile || existingProfile.weight !== Number.parseFloat(formData.weight)) {
+        await saveWeightEntry({
+          id: crypto.randomUUID(),
+          userId: user.id,
+          weight: Number.parseFloat(formData.weight),
+          date: new Date().toISOString().split('T')[0],
+        })
+      }
+      
+      setSaveSuccess(true)
+      setTimeout(() => setSaveSuccess(false), 2000)
+    } catch (error) {
+      console.error('[v0] Error saving profile:', error)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleSavePlan = async () => {
+    setAiPlan(editedPlan)
+    await saveProfileData(editedPlan)
+    setIsEditingPlan(false)
+  }
+
+  const handleCancelEditPlan = () => {
+    setEditedPlan(aiPlan || '')
+    setIsEditingPlan(false)
+  }
+
+  const handleStartEditPlan = () => {
+    setEditedPlan(aiPlan || '')
+    setIsEditingPlan(true)
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -219,32 +298,94 @@ export function ProfileForm() {
                 rows={3}
               />
             </div>
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? (
-                <>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Button 
+                type="button" 
+                variant="outline" 
+                className="flex-1 bg-transparent"
+                onClick={handleSaveProfile}
+                disabled={isSaving || isLoading}
+              >
+                {isSaving ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Генерация плана...
-                </>
-              ) : (
-                'Получить персональный план'
-              )}
-            </Button>
+                ) : saveSuccess ? (
+                  <Check className="mr-2 h-4 w-4 text-primary" />
+                ) : (
+                  <Save className="mr-2 h-4 w-4" />
+                )}
+                {saveSuccess ? 'Сохранено!' : 'Сохранить профиль'}
+              </Button>
+              <Button type="submit" className="flex-1" disabled={isLoading || isSaving}>
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Генерация...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="mr-2 h-4 w-4" />
+                    {aiPlan ? 'Перегенерировать план' : 'Получить план от AI'}
+                  </>
+                )}
+              </Button>
+            </div>
           </form>
         </CardContent>
       </Card>
 
       {aiPlan && (
         <Card className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <CardHeader>
-            <CardTitle>Ваш персональный план</CardTitle>
-            <CardDescription>
-              Рекомендации от ИИ на основе ваших данных
-            </CardDescription>
+          <CardHeader className="flex flex-row items-start justify-between space-y-0">
+            <div className="space-y-1">
+              <CardTitle>Ваш персональный план</CardTitle>
+              <CardDescription>
+                Рекомендации от ИИ на основе ваших данных
+              </CardDescription>
+            </div>
+            {!isEditingPlan ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleStartEditPlan}
+                className="bg-transparent"
+              >
+                <Pencil className="h-4 w-4 mr-1" />
+                Редактировать
+              </Button>
+            ) : (
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCancelEditPlan}
+                  className="bg-transparent"
+                >
+                  <X className="h-4 w-4 mr-1" />
+                  Отмена
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleSavePlan}
+                >
+                  <Check className="h-4 w-4 mr-1" />
+                  Сохранить
+                </Button>
+              </div>
+            )}
           </CardHeader>
           <CardContent>
-            <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap">
-              {aiPlan}
-            </div>
+            {isEditingPlan ? (
+              <Textarea
+                value={editedPlan}
+                onChange={(e) => setEditedPlan(e.target.value)}
+                className="min-h-[400px] font-mono text-sm"
+                placeholder="Введите ваш план в формате Markdown..."
+              />
+            ) : (
+              <div className="prose prose-sm dark:prose-invert max-w-none prose-headings:text-foreground prose-p:text-foreground prose-strong:text-foreground prose-li:text-foreground prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5">
+                <ReactMarkdown>{aiPlan}</ReactMarkdown>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

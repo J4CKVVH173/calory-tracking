@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '@/lib/auth-context'
-import { getProfileByUserId, getFoodLogsByUserId, getWeightEntriesByUserId } from '@/lib/storage'
+import { getProfileByUserId, getFoodLogsByUserId, getWeightEntriesByUserId } from '@/lib/api-storage'
 import type { UserProfile, FoodLog, WeightEntry } from '@/lib/types'
 import { WeightChart } from '@/components/dashboard/weight-chart'
 import { CalorieChart } from '@/components/dashboard/calorie-chart'
@@ -23,11 +23,16 @@ export default function DashboardPage() {
   const [weightEntries, setWeightEntries] = useState<WeightEntry[]>([])
   const [refreshKey, setRefreshKey] = useState(0)
 
-  const loadData = useCallback(() => {
+  const loadData = useCallback(async () => {
     if (user) {
-      setProfile(getProfileByUserId(user.id))
-      setFoodLogs(getFoodLogsByUserId(user.id))
-      setWeightEntries(getWeightEntriesByUserId(user.id))
+      const [profileData, logsData, weightData] = await Promise.all([
+        getProfileByUserId(user.id),
+        getFoodLogsByUserId(user.id),
+        getWeightEntriesByUserId(user.id),
+      ])
+      setProfile(profileData ?? undefined)
+      setFoodLogs(logsData)
+      setWeightEntries(weightData)
     }
   }, [user])
 
