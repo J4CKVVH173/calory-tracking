@@ -130,7 +130,7 @@ export default function DashboardPage() {
       {/* Charts */}
       <div className="grid gap-6 lg:grid-cols-2">
         <CalorieChart logs={foodLogs} />
-        <WeightChart entries={weightEntries} />
+        <WeightChart entries={weightEntries} profile={profile} />
       </div>
 
       {/* Weekly review */}

@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAuth } from '@/lib/auth-context'
-import { saveWeightEntry, getWeightEntriesByUserId } from '@/lib/api-storage'
+import { saveWeightEntry, getWeightEntriesByUserId, getProfileByUserId, saveProfile } from '@/lib/api-storage'
 import { Scale, Plus } from 'lucide-react'
 
 interface AddWeightProps {
@@ -23,21 +23,32 @@ export function AddWeight({ onWeightAdded }: AddWeightProps) {
     e.preventDefault()
     if (!user || !weight) return
 
+    const newWeight = Number.parseFloat(weight)
     const today = new Date().toISOString().split('T')[0]
     const existingEntries = await getWeightEntriesByUserId(user.id)
     const todayEntry = existingEntries.find((entry) => entry.date === today)
 
     if (todayEntry) {
       // Update today's entry
-      todayEntry.weight = Number.parseFloat(weight)
+      todayEntry.weight = newWeight
       await saveWeightEntry(todayEntry)
     } else {
       // Create new entry
       await saveWeightEntry({
         id: crypto.randomUUID(),
         userId: user.id,
-        weight: Number.parseFloat(weight),
+        weight: newWeight,
         date: today,
+      })
+    }
+
+    // Also update profile weight for synchronization
+    const profile = await getProfileByUserId(user.id)
+    if (profile) {
+      await saveProfile({
+        ...profile,
+        weight: newWeight,
+        updatedAt: new Date().toISOString(),
       })
     }
 

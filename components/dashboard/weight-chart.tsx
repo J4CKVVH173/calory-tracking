@@ -1,5 +1,6 @@
 'use client'
 
+import { useMemo } from 'react'
 import {
   Line,
   LineChart,
@@ -20,20 +21,38 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from '@/components/ui/chart'
-import type { WeightEntry } from '@/lib/types'
+import type { WeightEntry, UserProfile } from '@/lib/types'
 
 interface WeightChartProps {
   entries: WeightEntry[]
+  profile?: UserProfile
 }
 
-export function WeightChart({ entries }: WeightChartProps) {
-  const chartData = entries.map((entry) => ({
-    date: new Date(entry.date).toLocaleDateString('ru-RU', {
-      day: 'numeric',
-      month: 'short',
-    }),
-    weight: entry.weight,
-  }))
+export function WeightChart({ entries, profile }: WeightChartProps) {
+  const chartData = useMemo(() => {
+    // If we have weight entries, use them
+    if (entries.length > 0) {
+      return entries.map((entry) => ({
+        date: new Date(entry.date).toLocaleDateString('ru-RU', {
+          day: 'numeric',
+          month: 'short',
+        }),
+        weight: entry.weight,
+      }))
+    }
+    
+    // If no entries but we have profile weight, show it as starting point
+    if (profile?.weight) {
+      return [{
+        date: profile.updatedAt 
+          ? new Date(profile.updatedAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
+          : new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }),
+        weight: profile.weight,
+      }]
+    }
+    
+    return []
+  }, [entries, profile])
 
   if (chartData.length === 0) {
     return (

@@ -5,4 +5,4 @@ export const openrouter = createOpenRouter({
 })
 
 // Default model for the app - using Google Gemini Flash for reliability
-export const defaultModel = openrouter('google/gemini-2.5-flash-lite')
+export const defaultModel = openrouter('google/gemini-2.5-flash')

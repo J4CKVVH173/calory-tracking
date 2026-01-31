@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import ReactMarkdown from 'react-markdown'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import type { FoodLog, UserProfile } from '@/lib/types'
@@ -143,7 +144,9 @@ export function WeeklyReview({ logs, profile }: WeeklyReviewProps) {
               <Sparkles className="h-4 w-4 text-primary" />
               Рекомендации ИИ
             </h4>
-            <div className="text-sm whitespace-pre-wrap">{recommendation}</div>
+            <div className="prose prose-sm dark:prose-invert max-w-none prose-headings:text-foreground prose-p:text-foreground prose-strong:text-foreground prose-li:text-foreground prose-ul:my-2 prose-ol:my-2 prose-li:my-0.5">
+              <ReactMarkdown>{recommendation}</ReactMarkdown>
+            </div>
           </div>
         )}
       </CardContent>

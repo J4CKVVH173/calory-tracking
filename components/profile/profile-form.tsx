@@ -172,10 +172,10 @@ export function ProfileForm() {
         updatedAt: new Date().toISOString(),
       }
 
-      saveProfile(profile)
+      await saveProfile(profile)
 
-      // Save initial weight entry
-      saveWeightEntry({
+      // Save initial weight entry for chart visualization
+      await saveWeightEntry({
         id: crypto.randomUUID(),
         userId: user.id,
         weight: Number.parseFloat(formData.weight),
