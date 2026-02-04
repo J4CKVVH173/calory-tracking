@@ -29,39 +29,54 @@ export function MeasurementForm({ onMeasurementSaved }: MeasurementFormProps) {
     hips: '',
   })
 
-  useEffect(() => {
-    async function loadProfileData() {
-      if (!user) return
+  const loadProfileData = async () => {
+    if (!user) return
+    
+    setIsLoadingProfile(true)
+    try {
+      const [profileData, weightEntries] = await Promise.all([
+        getProfileByUserId(user.id),
+        getWeightEntriesByUserId(user.id),
+      ])
       
-      setIsLoadingProfile(true)
-      try {
-        const [profileData, weightEntries] = await Promise.all([
-          getProfileByUserId(user.id),
-          getWeightEntriesByUserId(user.id),
-        ])
-        
-        setProfile(profileData)
-        
-        // Auto-fill weight and height from profile/latest entries
-        const latestWeight = weightEntries.length > 0 
-          ? weightEntries[weightEntries.length - 1].weight 
-          : profileData?.weight
-        
-        if (latestWeight || profileData?.height) {
-          setFormData(prev => ({
-            ...prev,
-            weight: latestWeight?.toString() || prev.weight,
-            height: profileData?.height?.toString() || prev.height,
-          }))
-        }
-      } catch (error) {
-        console.error('Error loading profile:', error)
-      } finally {
-        setIsLoadingProfile(false)
+      setProfile(profileData)
+      
+      // Auto-fill weight and height from profile/latest entries
+      const latestWeight = weightEntries.length > 0 
+        ? weightEntries[weightEntries.length - 1].weight 
+        : profileData?.weight
+      
+      if (latestWeight || profileData?.height) {
+        setFormData(prev => ({
+          ...prev,
+          weight: latestWeight?.toString() || prev.weight,
+          height: profileData?.height?.toString() || prev.height,
+        }))
+      }
+    } catch (error) {
+      console.error('Error loading profile:', error)
+    } finally {
+      setIsLoadingProfile(false)
+    }
+  }
+
+  useEffect(() => {
+    loadProfileData()
+  }, [user])
+
+  // Refresh profile data when page gains focus
+  useEffect(() => {
+    const handleFocus = () => {
+      if (user) {
+        loadProfileData()
       }
     }
     
-    loadProfileData()
+    window.addEventListener('focus', handleFocus)
+    
+    return () => {
+      window.removeEventListener('focus', handleFocus)
+    }
   }, [user])
 
   // Navy Body Fat Formula

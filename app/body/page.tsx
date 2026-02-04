@@ -48,6 +48,31 @@ export default function BodyPage() {
     }
   }, [user, authLoading, router, loadData])
 
+  // Refresh data when page gains focus (e.g., navigating back from dashboard)
+  useEffect(() => {
+    const handleFocus = () => {
+      if (user) {
+        loadData()
+      }
+    }
+    
+    window.addEventListener('focus', handleFocus)
+    
+    // Also refresh on visibility change (tab switching)
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && user) {
+        loadData()
+      }
+    }
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    
+    return () => {
+      window.removeEventListener('focus', handleFocus)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }, [user, loadData])
+
   if (authLoading || isLoading) {
     return (
       <div className="container max-w-6xl mx-auto px-4 py-8">
