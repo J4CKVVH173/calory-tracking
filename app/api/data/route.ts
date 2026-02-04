@@ -1,12 +1,13 @@
 import { promises as fs } from 'fs'
 import path from 'path'
-import type { User, UserProfile, WeightEntry, FoodLog } from '@/lib/types'
+import type { User, UserProfile, WeightEntry, FoodLog, BodyMeasurement } from '@/lib/types'
 
 interface DataStore {
   users: User[]
   profiles: UserProfile[]
   weightEntries: WeightEntry[]
   foodLogs: FoodLog[]
+  bodyMeasurements: BodyMeasurement[]
 }
 
 const DATA_FILE = path.join(process.cwd(), 'data', 'store.json')
@@ -38,7 +39,7 @@ async function ensureDataDir() {
 }
 
 function getEmptyStore(): DataStore {
-  return { users: [], profiles: [], weightEntries: [], foodLogs: [] }
+  return { users: [], profiles: [], weightEntries: [], foodLogs: [], bodyMeasurements: [] }
 }
 
 async function readData(): Promise<DataStore> {
@@ -52,6 +53,7 @@ async function readData(): Promise<DataStore> {
       profiles: Array.isArray(parsed.profiles) ? parsed.profiles : [],
       weightEntries: Array.isArray(parsed.weightEntries) ? parsed.weightEntries : [],
       foodLogs: Array.isArray(parsed.foodLogs) ? parsed.foodLogs : [],
+      bodyMeasurements: Array.isArray(parsed.bodyMeasurements) ? parsed.bodyMeasurements : [],
     }
   } catch (error) {
     console.error('[v0] Error reading data file:', error)
@@ -67,6 +69,7 @@ async function writeData(data: DataStore): Promise<void> {
     profiles: Array.isArray(data.profiles) ? data.profiles : [],
     weightEntries: Array.isArray(data.weightEntries) ? data.weightEntries : [],
     foodLogs: Array.isArray(data.foodLogs) ? data.foodLogs : [],
+    bodyMeasurements: Array.isArray(data.bodyMeasurements) ? data.bodyMeasurements : [],
   }
   // Write to temp file first, then rename for atomic operation
   const tempFile = DATA_FILE + '.tmp'
@@ -111,6 +114,12 @@ export async function GET(request: Request) {
         foodLogs = foodLogs.filter(log => new Date(log.date) >= cutoff)
       }
       return Response.json(foodLogs)
+    case 'bodyMeasurements':
+      if (!userId) return Response.json([])
+      const bodyMeasurements = data.bodyMeasurements
+        .filter(m => m.userId === userId)
+        .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      return Response.json(bodyMeasurements)
     default:
       return Response.json(data)
   }
@@ -163,6 +172,16 @@ export async function POST(request: Request) {
           store.foodLogs[existingIndex] = { ...store.foodLogs[existingIndex], ...log }
         } else {
           store.foodLogs.push(log)
+        }
+        break
+      }
+      case 'bodyMeasurement': {
+        const measurement = newData as BodyMeasurement
+        const existingIndex = store.bodyMeasurements.findIndex(m => m.id === measurement.id)
+        if (existingIndex >= 0) {
+          store.bodyMeasurements[existingIndex] = { ...store.bodyMeasurements[existingIndex], ...measurement }
+        } else {
+          store.bodyMeasurements.push(measurement)
         }
         break
       }

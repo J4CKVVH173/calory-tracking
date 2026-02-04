@@ -95,12 +95,13 @@ export function BodyFatChart({ measurements, gender }: BodyFatChartProps) {
               <ReferenceLine y={healthyMin} stroke="#22c55e" strokeDasharray="5 5" />
               <ReferenceLine y={healthyMax} stroke="#22c55e" strokeDasharray="5 5" />
               <Line
-                type="monotone"
+                type="natural"
                 dataKey="bodyFat"
                 stroke={primaryColor}
                 strokeWidth={3}
                 dot={{ fill: primaryColor, strokeWidth: 2, r: 5 }}
                 activeDot={{ r: 7, fill: primaryColor }}
+                connectNulls
               />
             </LineChart>
           </ResponsiveContainer>

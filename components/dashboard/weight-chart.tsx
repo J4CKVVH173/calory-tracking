@@ -104,12 +104,13 @@ export function WeightChart({ entries, profile }: WeightChartProps) {
               />
               <ChartTooltip content={<ChartTooltipContent />} />
               <Line
-                type="monotone"
+                type="natural"
                 dataKey="weight"
                 stroke="var(--color-weight)"
-                strokeWidth={2}
-                dot={{ fill: 'var(--color-weight)', strokeWidth: 2 }}
+                strokeWidth={3}
+                dot={{ fill: 'var(--color-weight)', strokeWidth: 2, r: 4 }}
                 activeDot={{ r: 6 }}
+                connectNulls
               />
             </LineChart>
           </ResponsiveContainer>

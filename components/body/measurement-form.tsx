@@ -42,16 +42,10 @@ export function MeasurementForm({ onMeasurementSaved }: MeasurementFormProps) {
         
         setProfile(profileData)
         
-        console.log('[v0] Profile data loaded:', profileData)
-        console.log('[v0] Weight entries:', weightEntries)
-        
         // Auto-fill weight and height from profile/latest entries
         const latestWeight = weightEntries.length > 0 
           ? weightEntries[weightEntries.length - 1].weight 
           : profileData?.weight
-        
-        console.log('[v0] Latest weight:', latestWeight)
-        console.log('[v0] Profile height:', profileData?.height)
         
         if (latestWeight || profileData?.height) {
           setFormData(prev => ({
