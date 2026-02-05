@@ -81,3 +81,18 @@ export interface BodyMeasurement {
   date: string
   createdAt: string
 }
+
+// Saved food item for user's personal food database
+export interface SavedFood {
+  id: string
+  userId: string
+  name: string
+  weight: number // default serving size
+  calories: number // per serving
+  protein: number
+  fat: number
+  carbs: number
+  useCount: number // track frequency for sorting suggestions
+  lastUsed: string
+  createdAt: string
+}

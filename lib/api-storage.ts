@@ -1,4 +1,4 @@
-import type { User, UserProfile, WeightEntry, FoodLog, BodyMeasurement } from './types'
+import type { User, UserProfile, WeightEntry, FoodLog, BodyMeasurement, SavedFood } from './types'
 
 const API_BASE = '/api/data'
 
@@ -85,5 +85,25 @@ export async function saveBodyMeasurement(measurement: BodyMeasurement): Promise
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ type: 'bodyMeasurement', data: measurement }),
+  })
+}
+
+// Saved food methods (user's personal food database)
+export async function getSavedFoodsByUserId(userId: string): Promise<SavedFood[]> {
+  const res = await fetch(`${API_BASE}?type=savedFoods&userId=${encodeURIComponent(userId)}`)
+  return res.json()
+}
+
+export async function saveSavedFood(food: SavedFood): Promise<void> {
+  await fetch(API_BASE, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type: 'savedFood', data: food }),
+  })
+}
+
+export async function deleteSavedFood(foodId: string): Promise<void> {
+  await fetch(`${API_BASE}?type=savedFood&id=${encodeURIComponent(foodId)}`, {
+    method: 'DELETE',
   })
 }
