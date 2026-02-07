@@ -143,11 +143,25 @@ export function FoodInput({ onFoodAdded }: FoodInputProps) {
   const handleUpdateItem = (index: number, field: keyof FoodItem, value: string | number) => {
     if (!parsedItems) return
     const updated = [...parsedItems]
+    const item = updated[index]
+    
     if (field === 'name') {
-      updated[index][field] = value as string
+      item.name = value as string
+    } else if (field === 'weight') {
+      // Recalculate all nutritional values proportionally when weight changes
+      const newWeight = typeof value === 'string' ? parseFloat(value) || 0 : value
+      const oldWeight = item.weight || 1
+      const ratio = newWeight / oldWeight
+      
+      item.weight = newWeight
+      item.calories = Math.round(item.calories * ratio)
+      item.protein = Math.round(item.protein * ratio * 10) / 10
+      item.fat = Math.round(item.fat * ratio * 10) / 10
+      item.carbs = Math.round(item.carbs * ratio * 10) / 10
     } else {
-      updated[index][field] = typeof value === 'string' ? parseFloat(value) || 0 : value
+      item[field] = typeof value === 'string' ? parseFloat(value) || 0 : value
     }
+    
     setParsedItems(updated)
   }
 

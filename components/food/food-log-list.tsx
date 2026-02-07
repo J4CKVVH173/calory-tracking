@@ -1,29 +1,131 @@
 'use client'
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useState } from 'react'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import type { FoodLog } from '@/lib/types'
-import { deleteFoodLog } from '@/lib/api-storage'
-import { Trash2, Utensils } from 'lucide-react'
+import { Input } from '@/components/ui/input'
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible'
+import type { FoodLog, FoodItem } from '@/lib/types'
+import { deleteFoodLog, saveFoodLog } from '@/lib/api-storage'
+import { Trash2, Utensils, ChevronDown, ChevronRight, Pencil, Check, X } from 'lucide-react'
 
 interface FoodLogListProps {
   logs: FoodLog[]
   onDelete: () => void
 }
 
+interface EditingState {
+  logId: string
+  itemIndex: number
+}
+
 export function FoodLogList({ logs, onDelete }: FoodLogListProps) {
+  const today = new Date().toISOString().split('T')[0]
+  
+  // Track which days are expanded - today is expanded by default
+  const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set([today]))
+  const [editingItem, setEditingItem] = useState<EditingState | null>(null)
+  const [editedValues, setEditedValues] = useState<FoodItem | null>(null)
+
   const handleDelete = async (logId: string) => {
     await deleteFoodLog(logId)
     onDelete()
   }
 
+  const toggleDay = (date: string) => {
+    setExpandedDays(prev => {
+      const next = new Set(prev)
+      if (next.has(date)) {
+        next.delete(date)
+      } else {
+        next.add(date)
+      }
+      return next
+    })
+  }
+
+  const startEditing = (logId: string, itemIndex: number, item: FoodItem) => {
+    setEditingItem({ logId, itemIndex })
+    setEditedValues({ ...item })
+  }
+
+  const cancelEditing = () => {
+    setEditingItem(null)
+    setEditedValues(null)
+  }
+
+  const handleEditChange = (field: keyof FoodItem, value: string | number) => {
+    if (!editedValues) return
+    
+    if (field === 'name') {
+      setEditedValues({ ...editedValues, name: value as string })
+    } else if (field === 'weight') {
+      // Recalculate all nutritional values proportionally when weight changes
+      const newWeight = typeof value === 'string' ? parseFloat(value) || 0 : value
+      const oldWeight = editedValues.weight || 1
+      const ratio = newWeight / oldWeight
+      
+      setEditedValues({
+        ...editedValues,
+        weight: newWeight,
+        calories: Math.round(editedValues.calories * ratio),
+        protein: Math.round(editedValues.protein * ratio * 10) / 10,
+        fat: Math.round(editedValues.fat * ratio * 10) / 10,
+        carbs: Math.round(editedValues.carbs * ratio * 10) / 10,
+      })
+    } else {
+      setEditedValues({
+        ...editedValues,
+        [field]: typeof value === 'string' ? parseFloat(value) || 0 : value,
+      })
+    }
+  }
+
+  const saveEdit = async () => {
+    if (!editingItem || !editedValues) return
+    
+    const log = logs.find(l => l.id === editingItem.logId)
+    if (!log) return
+    
+    const updatedItems = [...log.items]
+    updatedItems[editingItem.itemIndex] = editedValues
+    
+    const updatedLog: FoodLog = {
+      ...log,
+      items: updatedItems,
+    }
+    
+    await saveFoodLog(updatedLog)
+    cancelEditing()
+    onDelete() // Trigger refresh
+  }
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
     return date.toLocaleDateString('ru-RU', {
-      day: 'numeric',
-      month: 'long',
       hour: '2-digit',
       minute: '2-digit',
+    })
+  }
+
+  const formatDayHeader = (dateString: string) => {
+    const date = new Date(dateString)
+    const isToday = dateString === today
+    const yesterday = new Date()
+    yesterday.setDate(yesterday.getDate() - 1)
+    const isYesterday = dateString === yesterday.toISOString().split('T')[0]
+    
+    if (isToday) return 'Сегодня'
+    if (isYesterday) return 'Вчера'
+    
+    return date.toLocaleDateString('ru-RU', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
     })
   }
 
@@ -55,9 +157,12 @@ export function FoodLogList({ logs, onDelete }: FoodLogListProps) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3">
       {sortedDates.map((date) => {
         const dayLogs = groupedLogs[date]
+        const isExpanded = expandedDays.has(date)
+        const isToday = date === today
+        
         const dayCalories = dayLogs.reduce(
           (sum, log) => sum + log.items.reduce((s, item) => s + item.calories, 0),
           0
@@ -76,62 +181,141 @@ export function FoodLogList({ logs, onDelete }: FoodLogListProps) {
         )
 
         return (
-          <Card key={date} className="animate-in fade-in slide-in-from-bottom-4 duration-500">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-lg">
-                    {new Date(date).toLocaleDateString('ru-RU', {
-                      weekday: 'long',
-                      day: 'numeric',
-                      month: 'long',
-                    })}
-                  </CardTitle>
-                  <CardDescription>
-                    Всего: {dayCalories} ккал | Б: {dayProtein.toFixed(1)}г | Ж: {dayFat.toFixed(1)}г | У: {dayCarbs.toFixed(1)}г
-                  </CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {dayLogs.map((log) => (
-                <div
-                  key={log.id}
-                  className="border rounded-lg p-4 space-y-3 hover:bg-muted/50 transition-colors"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="flex-1">
-                      <p className="text-sm text-muted-foreground mb-2">
-                        {formatDate(log.createdAt)}
-                      </p>
-                      <p className="text-sm italic mb-2 text-muted-foreground">
-                        {'"'}{log.rawInput}{'"'}
-                      </p>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleDelete(log.id)}
-                      className="text-muted-foreground hover:text-destructive shrink-0"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <div className="space-y-1">
-                    {log.items.map((item, index) => (
-                      <div
-                        key={index}
-                        className="flex items-center justify-between text-sm py-1 border-b last:border-0"
-                      >
-                        <span>{item.name} ({item.weight}г)</span>
-                        <span className="font-medium">{item.calories} ккал</span>
+          <Collapsible
+            key={date}
+            open={isExpanded}
+            onOpenChange={() => toggleDay(date)}
+          >
+            <Card className={isToday ? 'border-primary/30' : ''}>
+              <CollapsibleTrigger asChild>
+                <button className="w-full p-4 flex items-center justify-between hover:bg-muted/50 transition-colors rounded-t-lg">
+                  <div className="flex items-center gap-3">
+                    {isExpanded ? (
+                      <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                    ) : (
+                      <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                    )}
+                    <div className="text-left">
+                      <div className="font-semibold flex items-center gap-2">
+                        {formatDayHeader(date)}
+                        {isToday && (
+                          <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                            Сегодня
+                          </span>
+                        )}
                       </div>
-                    ))}
+                      <div className="text-sm text-muted-foreground">
+                        {dayLogs.length} {dayLogs.length === 1 ? 'прием' : dayLogs.length < 5 ? 'приема' : 'приемов'} пищи
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+                  <div className="text-right">
+                    <div className="font-bold text-lg">{dayCalories} ккал</div>
+                    <div className="text-xs text-muted-foreground">
+                      Б: {dayProtein.toFixed(0)}г | Ж: {dayFat.toFixed(0)}г | У: {dayCarbs.toFixed(0)}г
+                    </div>
+                  </div>
+                </button>
+              </CollapsibleTrigger>
+              
+              <CollapsibleContent>
+                <CardContent className="pt-0 space-y-3">
+                  {dayLogs.map((log) => (
+                    <div
+                      key={log.id}
+                      className="border rounded-lg p-3 space-y-2 bg-muted/20"
+                    >
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>{formatDate(log.createdAt)}</span>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDelete(log.id)}
+                          className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                      
+                      <div className="space-y-1">
+                        {log.items.map((item, index) => {
+                          const isEditingThis = editingItem?.logId === log.id && editingItem?.itemIndex === index
+                          
+                          if (isEditingThis && editedValues) {
+                            return (
+                              <div key={index} className="flex items-center gap-2 py-1 bg-background rounded px-2">
+                                <Input
+                                  value={editedValues.name}
+                                  onChange={(e) => handleEditChange('name', e.target.value)}
+                                  className="h-7 flex-1 text-sm"
+                                />
+                                <Input
+                                  type="number"
+                                  value={editedValues.weight}
+                                  onChange={(e) => handleEditChange('weight', e.target.value)}
+                                  className="h-7 w-16 text-sm text-right"
+                                />
+                                <span className="text-xs text-muted-foreground">г</span>
+                                <Input
+                                  type="number"
+                                  value={editedValues.calories}
+                                  onChange={(e) => handleEditChange('calories', e.target.value)}
+                                  className="h-7 w-16 text-sm text-right"
+                                />
+                                <span className="text-xs text-muted-foreground">ккал</span>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  onClick={saveEdit}
+                                >
+                                  <Check className="h-3 w-3 text-green-600" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  onClick={cancelEditing}
+                                >
+                                  <X className="h-3 w-3 text-destructive" />
+                                </Button>
+                              </div>
+                            )
+                          }
+                          
+                          return (
+                            <div
+                              key={index}
+                              className="flex items-center justify-between text-sm py-1 group"
+                            >
+                              <div className="flex items-center gap-2">
+                                <span>{item.name}</span>
+                                <span className="text-muted-foreground">({item.weight}г)</span>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                  onClick={() => startEditing(log.id, index, item)}
+                                >
+                                  <Pencil className="h-3 w-3" />
+                                </Button>
+                              </div>
+                              <div className="text-right">
+                                <span className="font-medium">{item.calories} ккал</span>
+                                <span className="text-xs text-muted-foreground ml-2">
+                                  {item.protein.toFixed(0)}/{item.fat.toFixed(0)}/{item.carbs.toFixed(0)}
+                                </span>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
         )
       })}
     </div>
