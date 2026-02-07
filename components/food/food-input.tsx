@@ -16,6 +16,7 @@ interface FoodInputProps {
 
 interface EditableFoodItem extends FoodItem {
   isEditing?: boolean
+  quantity: number
 }
 
 function hasMissingMacros(item: FoodItem): boolean {
@@ -84,6 +85,7 @@ export function FoodInput({ onFoodAdded }: FoodInputProps) {
       protein: food.protein,
       fat: food.fat,
       carbs: food.carbs,
+      quantity: 1,
     }
     setParsedItems(prev => prev ? [...prev, newItem] : [newItem])
     setInput('')
@@ -124,7 +126,11 @@ export function FoodInput({ onFoodAdded }: FoodInputProps) {
       }
 
       if (data.items && data.items.length > 0) {
-        const newItems = data.items.map((item: FoodItem) => ({ ...item, isEditing: false }))
+        const newItems = data.items.map((item: FoodItem & { quantity?: number }) => ({
+          ...item,
+          quantity: item.quantity || 1,
+          isEditing: false,
+        }))
         setParsedItems(prev => prev ? [...prev, ...newItems] : newItems)
         setInput('')
       } else {
@@ -193,6 +199,13 @@ export function FoodInput({ onFoodAdded }: FoodInputProps) {
     setParsedItems(updated)
   }
 
+  const handleQuantityChange = (index: number, newQty: number) => {
+    if (!parsedItems || newQty < 1) return
+    const updated = [...parsedItems]
+    updated[index].quantity = newQty
+    setParsedItems(updated)
+  }
+
   const handleRemoveItem = (index: number) => {
     if (!parsedItems) return
     const updated = parsedItems.filter((_, i) => i !== index)
@@ -244,10 +257,23 @@ export function FoodInput({ onFoodAdded }: FoodInputProps) {
   const handleSave = async () => {
     if (!parsedItems || !user) return
 
+    // Expand quantities: multiply weight/calories/macros by quantity for storage
+    const expandedItems = parsedItems.map(({ isEditing, quantity, ...item }) => {
+      const qty = quantity || 1
+      return {
+        name: qty > 1 ? `${item.name} x${qty}` : item.name,
+        weight: Math.round(item.weight * qty),
+        calories: Math.round(item.calories * qty),
+        protein: Math.round(item.protein * qty),
+        fat: Math.round(item.fat * qty),
+        carbs: Math.round(item.carbs * qty),
+      }
+    })
+
     const foodLog: FoodLog = {
       id: crypto.randomUUID(),
       userId: user.id,
-      items: parsedItems.map(({ isEditing, ...item }) => item),
+      items: expandedItems,
       rawInput: input || 'Быстрое добавление',
       date: new Date().toISOString().split('T')[0],
       createdAt: new Date().toISOString(),
@@ -265,10 +291,10 @@ export function FoodInput({ onFoodAdded }: FoodInputProps) {
     onFoodAdded()
   }
 
-  const totalCalories = parsedItems?.reduce((sum, item) => sum + item.calories, 0) || 0
-  const totalProtein = parsedItems?.reduce((sum, item) => sum + item.protein, 0) || 0
-  const totalFat = parsedItems?.reduce((sum, item) => sum + item.fat, 0) || 0
-  const totalCarbs = parsedItems?.reduce((sum, item) => sum + item.carbs, 0) || 0
+  const totalCalories = parsedItems?.reduce((sum, item) => sum + item.calories * (item.quantity || 1), 0) || 0
+  const totalProtein = parsedItems?.reduce((sum, item) => sum + item.protein * (item.quantity || 1), 0) || 0
+  const totalFat = parsedItems?.reduce((sum, item) => sum + item.fat * (item.quantity || 1), 0) || 0
+  const totalCarbs = parsedItems?.reduce((sum, item) => sum + item.carbs * (item.quantity || 1), 0) || 0
 
   return (
     <Card>
@@ -385,6 +411,7 @@ export function FoodInput({ onFoodAdded }: FoodInputProps) {
                 <thead className="bg-muted">
                   <tr>
                     <th className="text-left p-3 font-medium">Продукт</th>
+                    <th className="text-center p-3 font-medium w-16">Кол.</th>
                     <th className="text-right p-3 font-medium w-20">Вес</th>
                     <th className="text-right p-3 font-medium w-20">Ккал</th>
                     <th className="text-right p-3 font-medium hidden sm:table-cell">Б/Ж/У</th>
@@ -395,7 +422,7 @@ export function FoodInput({ onFoodAdded }: FoodInputProps) {
                   {parsedItems.map((item, index) => (
                     item.isEditing ? (
                       <tr key={index} className="border-t">
-                        <td colSpan={5} className="p-3">
+                        <td colSpan={6} className="p-3">
                           <div className="space-y-2 bg-muted/30 rounded-lg p-3">
                             <div className="flex items-center gap-2">
                               <Input
@@ -500,10 +527,32 @@ export function FoodInput({ onFoodAdded }: FoodInputProps) {
                             )}
                           </div>
                         </td>
-                        <td className="text-right p-3">{item.weight}г</td>
-                        <td className="text-right p-3 font-medium">{item.calories}</td>
+                        <td className="p-2">
+                          <div className="flex items-center justify-center gap-0.5">
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6"
+                              onClick={() => handleQuantityChange(index, (item.quantity || 1) - 1)}
+                              disabled={(item.quantity || 1) <= 1}
+                            >
+                              <span className="text-base leading-none">-</span>
+                            </Button>
+                            <span className="w-5 text-center text-sm font-medium">{item.quantity || 1}</span>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6"
+                              onClick={() => handleQuantityChange(index, (item.quantity || 1) + 1)}
+                            >
+                              <span className="text-base leading-none">+</span>
+                            </Button>
+                          </div>
+                        </td>
+                        <td className="text-right p-3">{item.weight * (item.quantity || 1)}г</td>
+                        <td className="text-right p-3 font-medium">{item.calories * (item.quantity || 1)}</td>
                         <td className="text-right p-3 text-muted-foreground hidden sm:table-cell">
-                          {Math.round(item.protein)}/{Math.round(item.fat)}/{Math.round(item.carbs)}
+                          {Math.round(item.protein * (item.quantity || 1))}/{Math.round(item.fat * (item.quantity || 1))}/{Math.round(item.carbs * (item.quantity || 1))}
                         </td>
                         <td className="p-2">
                           <div className="flex gap-1">
@@ -534,6 +583,7 @@ export function FoodInput({ onFoodAdded }: FoodInputProps) {
                 <tfoot className="bg-muted/50 font-medium">
                   <tr className="border-t">
                     <td className="p-3">Итого</td>
+                    <td></td>
                     <td className="text-right p-3">-</td>
                     <td className="text-right p-3 text-primary">{totalCalories}</td>
                     <td className="text-right p-3 hidden sm:table-cell">

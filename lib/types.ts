@@ -39,6 +39,7 @@ export interface FoodItem {
   protein: number
   fat: number
   carbs: number
+  quantity?: number // multiplier for portions, default 1
 }
 
 export interface FoodLog {

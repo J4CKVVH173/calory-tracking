@@ -4,11 +4,12 @@ import { defaultModel } from '@/lib/openrouter'
 
 const foodItemSchema = z.object({
   name: z.string().describe('Название продукта на русском'),
-  weight: z.number().describe('Вес в граммах'),
-  calories: z.number().describe('Калории'),
-  protein: z.number().describe('Белки в граммах'),
-  fat: z.number().describe('Жиры в граммах'),
-  carbs: z.number().describe('Углеводы в граммах'),
+  weight: z.number().describe('Вес одной порции в граммах'),
+  calories: z.number().describe('Калории на одну порцию'),
+  protein: z.number().describe('Белки в граммах на одну порцию'),
+  fat: z.number().describe('Жиры в граммах на одну порцию'),
+  carbs: z.number().describe('Углеводы в граммах на одну порцию'),
+  quantity: z.number().default(1).describe('Количество порций (по умолчанию 1)'),
 })
 
 const foodResponseSchema = z.object({
@@ -36,6 +37,9 @@ export async function POST(request: Request) {
 - Примерный вес в граммах (если не указан, используй стандартную порцию)
 - Калории
 - Белки, жиры, углеводы в граммах
+- Количество порций (quantity) — если пользователь указал множитель (например "2 бутерброда", "3 яйца", "х2"), используй его. По умолчанию 1.
+
+ВАЖНО: Если пользователь указал количество (например "2 бутерброда", "3 яйца вкрутую", "кофе x2"), установи quantity равным этому числу. Вес и нутриенты должны быть НА ОДНУ ПОРЦИЮ — клиент сам умножит на quantity.
 
 Если описание непонятное или не содержит еды, установи success в false.
 Используй реалистичные значения калорий и нутриентов на основе справочных данных.`
