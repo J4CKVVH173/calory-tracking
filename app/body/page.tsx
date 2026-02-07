@@ -75,7 +75,7 @@ export default function BodyPage() {
 
   if (authLoading || isLoading) {
     return (
-      <div className="container max-w-6xl mx-auto px-4 py-8">
+      <div className="container max-w-6xl mx-auto px-2 py-4 sm:px-4 sm:py-8">
         <div className="flex items-center justify-center h-[60vh]">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
@@ -121,17 +121,17 @@ export default function BodyPage() {
   }
 
   return (
-    <div className="container max-w-6xl mx-auto px-4 py-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-balance">Состав тела</h1>
-        <p className="text-muted-foreground mt-2">
+    <div className="container max-w-6xl mx-auto px-2 py-4 sm:px-4 sm:py-8">
+      <div className="mb-4 sm:mb-8">
+        <h1 className="text-2xl sm:text-3xl font-bold text-balance">Состав тела</h1>
+        <p className="text-muted-foreground mt-1 sm:mt-2 text-sm sm:text-base">
           Отслеживайте процент подкожного жира и следите за прогрессом
         </p>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-3 sm:gap-6 lg:grid-cols-2">
         {/* Left Column - Form and Reference */}
-        <div className="space-y-6">
+        <div className="space-y-3 sm:space-y-6">
           <MeasurementForm onMeasurementSaved={loadData} />
           
           <Card>
@@ -163,7 +163,7 @@ export default function BodyPage() {
         </div>
 
         {/* Right Column - Current Stats */}
-        <div className="space-y-6">
+        <div className="space-y-3 sm:space-y-6">
           {latestMeasurement ? (
             <>
               <Card className="bg-gradient-to-br from-primary/10 to-primary/5">
@@ -175,7 +175,7 @@ export default function BodyPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="flex items-end gap-4">
-                    <div className="text-6xl font-bold text-primary">
+    <div className="text-4xl sm:text-6xl font-bold text-primary">
                       {latestMeasurement.bodyFatPercentage.toFixed(1)}%
                     </div>
                     {fatDifference !== null && (
@@ -208,29 +208,29 @@ export default function BodyPage() {
                 </CardContent>
               </Card>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-2 sm:gap-4">
                 <Card>
-                  <CardContent className="pt-6">
-                    <div className="text-3xl font-bold">{latestMeasurement.weight} кг</div>
-                    <p className="text-sm text-muted-foreground mt-1">Вес</p>
+                  <CardContent className="pt-4 sm:pt-6 pb-4">
+                    <div className="text-2xl sm:text-3xl font-bold">{latestMeasurement.weight} кг</div>
+                    <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">Вес</p>
                   </CardContent>
                 </Card>
                 <Card>
-                  <CardContent className="pt-6">
-                    <div className="text-3xl font-bold">{latestMeasurement.height} см</div>
-                    <p className="text-sm text-muted-foreground mt-1">Рост</p>
+                  <CardContent className="pt-4 sm:pt-6 pb-4">
+                    <div className="text-2xl sm:text-3xl font-bold">{latestMeasurement.height} см</div>
+                    <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">Рост</p>
                   </CardContent>
                 </Card>
                 <Card>
-                  <CardContent className="pt-6">
-                    <div className="text-3xl font-bold">{latestMeasurement.waist} см</div>
-                    <p className="text-sm text-muted-foreground mt-1">Талия</p>
+                  <CardContent className="pt-4 sm:pt-6 pb-4">
+                    <div className="text-2xl sm:text-3xl font-bold">{latestMeasurement.waist} см</div>
+                    <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">Талия</p>
                   </CardContent>
                 </Card>
                 <Card>
-                  <CardContent className="pt-6">
-                    <div className="text-3xl font-bold">{latestMeasurement.neck} см</div>
-                    <p className="text-sm text-muted-foreground mt-1">Шея</p>
+                  <CardContent className="pt-4 sm:pt-6 pb-4">
+                    <div className="text-2xl sm:text-3xl font-bold">{latestMeasurement.neck} см</div>
+                    <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">Шея</p>
                   </CardContent>
                 </Card>
                 {latestMeasurement.hips && (
@@ -264,7 +264,7 @@ export default function BodyPage() {
       </div>
 
       {/* Chart - Full Width */}
-      <div className="mt-6">
+      <div className="mt-3 sm:mt-6">
         <BodyFatChart measurements={measurements} gender={gender} />
       </div>
     </div>

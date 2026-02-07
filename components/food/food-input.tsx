@@ -281,7 +281,7 @@ export function FoodInput({ onFoodAdded }: FoodInputProps) {
           Опишите что вы съели или выберите из истории
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-3 sm:space-y-4 px-3 sm:px-6">
         {/* Input with autocomplete */}
         <div className="relative" ref={suggestionsRef}>
           <Textarea

@@ -90,8 +90,8 @@ export function TodayStats({ logs, profile }: TodayStatsProps) {
           })}
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <CardContent className="space-y-3 sm:space-y-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
           {macros.map((macro) => {
             const Icon = macro.icon
             const progress = Math.min((macro.current / macro.target) * 100, 100)
@@ -101,19 +101,19 @@ export function TodayStats({ logs, profile }: TodayStatsProps) {
             return (
               <div
                 key={macro.label}
-                className={`p-4 rounded-xl ${macro.bgColor}`}
+                className={`p-2.5 sm:p-4 rounded-xl ${macro.bgColor}`}
               >
-                <div className="flex items-center gap-2 mb-3">
-                  <Icon className={`h-5 w-5 ${macro.textColor}`} />
-                  <span className={`font-medium ${macro.textColor}`}>{macro.label}</span>
+                <div className="flex items-center gap-1.5 sm:gap-2 mb-2 sm:mb-3">
+                  <Icon className={`h-4 w-4 sm:h-5 sm:w-5 ${macro.textColor}`} />
+                  <span className={`text-xs sm:text-sm font-medium ${macro.textColor}`}>{macro.label}</span>
                 </div>
                 
-                <div className="space-y-2">
+                <div className="space-y-1.5 sm:space-y-2">
                   <div className="flex items-end justify-between">
-                    <span className={`text-2xl font-bold ${macro.textColor}`}>
+                    <span className={`text-lg sm:text-2xl font-bold ${macro.textColor}`}>
                       {macro.current}
                     </span>
-                    <span className="text-sm text-muted-foreground">
+                    <span className="text-[10px] sm:text-sm text-muted-foreground">
                       / {macro.target} {macro.unit}
                     </span>
                   </div>

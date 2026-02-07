@@ -49,7 +49,7 @@ export default function FoodPage() {
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-2xl space-y-6">
+    <div className="container mx-auto px-2 py-4 sm:px-4 sm:py-8 max-w-2xl space-y-3 sm:space-y-6">
       <FoodInput onFoodAdded={handleRefresh} />
       <FoodLogList logs={logs} onDelete={handleRefresh} />
     </div>

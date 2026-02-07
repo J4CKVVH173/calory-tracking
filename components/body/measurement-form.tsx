@@ -212,7 +212,7 @@ export function MeasurementForm({ onMeasurementSaved }: MeasurementFormProps) {
           </Button>
         </div>
       </CardHeader>
-      <CardContent className="space-y-6">
+      <CardContent className="space-y-4 sm:space-y-6 px-3 sm:px-6">
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label htmlFor="weight">Вес (кг)</Label>

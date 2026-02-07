@@ -62,7 +62,7 @@ export default function DashboardPage() {
   const hasFoodLogs = foodLogs.length > 0
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-4xl space-y-6">
+    <div className="container mx-auto px-2 py-4 sm:px-4 sm:py-8 max-w-4xl space-y-3 sm:space-y-6">
       {/* Welcome header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -78,7 +78,7 @@ export default function DashboardPage() {
 
       {/* Quick actions if missing profile or food logs */}
       {(!hasProfile || !hasFoodLogs) && (
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-2 sm:gap-4 sm:grid-cols-2">
           {!hasProfile && (
             <Card className="border-primary/20 bg-primary/5">
               <CardHeader className="pb-3">
@@ -128,7 +128,7 @@ export default function DashboardPage() {
       <TodayStats logs={foodLogs} profile={profile} />
 
       {/* Charts */}
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid gap-3 sm:gap-6 lg:grid-cols-2">
         <CalorieChart logs={foodLogs} />
         <WeightChart entries={weightEntries} profile={profile} />
       </div>
