@@ -1,529 +1,398 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState } from 'react'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Textarea } from '@/components/ui/textarea'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { useAuth } from '@/lib/auth-context'
-import { saveFoodLog, getSavedFoodsByUserId, saveSavedFood } from '@/lib/api-storage'
-import type { FoodItem, FoodLog, SavedFood } from '@/lib/types'
-import { Loader2, Plus, Search, Clock, Star, Pencil, Check, X, Bookmark } from 'lucide-react'
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible'
+import type { FoodLog, FoodItem } from '@/lib/types'
+import { deleteFoodLog, saveFoodLog } from '@/lib/api-storage'
+import { Trash2, Utensils, ChevronDown, ChevronRight, Pencil, Check, X, RotateCcw, AlertTriangle } from 'lucide-react'
 
-interface FoodInputProps {
-  onFoodAdded: () => void
+interface FoodLogListProps {
+  logs: FoodLog[]
+  onDelete: () => void
 }
 
-interface EditableFoodItem extends FoodItem {
-  isEditing?: boolean
+interface EditingState {
+  logId: string
+  itemIndex: number
 }
 
-export function FoodInput({ onFoodAdded }: FoodInputProps) {
-  const { user } = useAuth()
-  const [input, setInput] = useState('')
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [parsedItems, setParsedItems] = useState<EditableFoodItem[] | null>(null)
-  const [savedFoods, setSavedFoods] = useState<SavedFood[]>([])
-  const [showSuggestions, setShowSuggestions] = useState(false)
-  const [filteredSuggestions, setFilteredSuggestions] = useState<SavedFood[]>([])
-  const inputRef = useRef<HTMLTextAreaElement>(null)
-  const suggestionsRef = useRef<HTMLDivElement>(null)
+function hasMissingMacros(item: FoodItem): boolean {
+  return item.calories > 0 && item.protein === 0 && item.fat === 0 && item.carbs === 0
+}
 
-  // Load saved foods on mount
-  useEffect(() => {
-    if (user) {
-      getSavedFoodsByUserId(user.id).then(foods => {
-        setSavedFoods(Array.isArray(foods) ? foods : [])
-      })
-    }
-  }, [user])
+export function FoodLogList({ logs, onDelete }: FoodLogListProps) {
+  const today = new Date().toISOString().split('T')[0]
+  
+  // Track which days are expanded - today is expanded by default
+  const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set([today]))
+  const [editingItem, setEditingItem] = useState<EditingState | null>(null)
+  const [editedValues, setEditedValues] = useState<FoodItem | null>(null)
+  const [originalValues, setOriginalValues] = useState<FoodItem | null>(null)
 
-  // Filter suggestions based on input
-  useEffect(() => {
-    if (input.trim().length > 0 && savedFoods.length > 0) {
-      const searchTerm = input.toLowerCase()
-      const filtered = savedFoods
-        .filter(food => food.name.toLowerCase().includes(searchTerm))
-        .slice(0, 5)
-      setFilteredSuggestions(filtered)
-      setShowSuggestions(filtered.length > 0)
-    } else {
-      setShowSuggestions(false)
-    }
-  }, [input, savedFoods])
-
-  // Click outside to close suggestions
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (suggestionsRef.current && !suggestionsRef.current.contains(event.target as Node)) {
-        setShowSuggestions(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
-
-  const handleSelectSuggestion = (food: SavedFood) => {
-    // Add to parsed items directly
-    const newItem: EditableFoodItem = {
-      name: food.name,
-      weight: food.weight,
-      calories: food.calories,
-      protein: food.protein,
-      fat: food.fat,
-      carbs: food.carbs,
-    }
-    setParsedItems(prev => prev ? [...prev, newItem] : [newItem])
-    setInput('')
-    setShowSuggestions(false)
-    
-    // Update use count
-    updateSavedFoodUseCount(food)
+  const handleDelete = async (logId: string) => {
+    await deleteFoodLog(logId)
+    onDelete()
   }
 
-  const updateSavedFoodUseCount = async (food: SavedFood) => {
-    const updatedFood: SavedFood = {
-      ...food,
-      useCount: food.useCount + 1,
-      lastUsed: new Date().toISOString(),
-    }
-    await saveSavedFood(updatedFood)
-    setSavedFoods(prev => prev.map(f => f.id === food.id ? updatedFood : f))
-  }
-
-  const handleParse = async () => {
-    if (!input.trim() || !user) return
-
-    setIsLoading(true)
-    setError(null)
-
-    try {
-      const response = await fetch('/api/ai/parse-food', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ description: input }),
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        setError(data.error || 'Не удалось распознать еду')
-        return
-      }
-
-      if (data.items && data.items.length > 0) {
-        const newItems = data.items.map((item: FoodItem) => ({ ...item, isEditing: false }))
-        setParsedItems(prev => prev ? [...prev, ...newItems] : newItems)
-        setInput('')
+  const toggleDay = (date: string) => {
+    setExpandedDays(prev => {
+      const next = new Set(prev)
+      if (next.has(date)) {
+        next.delete(date)
       } else {
-        setError('Не удалось распознать — уточните описание')
+        next.add(date)
       }
-    } catch {
-      setError('Произошла ошибка. Попробуйте снова.')
-    } finally {
-      setIsLoading(false)
+      return next
+    })
+  }
+
+  const startEditing = (logId: string, itemIndex: number, item: FoodItem) => {
+    setEditingItem({ logId, itemIndex })
+    setEditedValues({ ...item })
+    setOriginalValues({ ...item })
+  }
+
+  const cancelEditing = () => {
+    setEditingItem(null)
+    setEditedValues(null)
+    setOriginalValues(null)
+  }
+
+  const resetEdit = () => {
+    if (originalValues) {
+      setEditedValues({ ...originalValues })
     }
   }
 
-  const handleEditItem = (index: number) => {
-    if (!parsedItems) return
-    const updated = [...parsedItems]
-    updated[index].isEditing = true
-    setParsedItems(updated)
-  }
-
-  const handleCancelEdit = (index: number) => {
-    if (!parsedItems) return
-    const updated = [...parsedItems]
-    updated[index].isEditing = false
-    setParsedItems(updated)
-  }
-
-  const handleUpdateItem = (index: number, field: keyof FoodItem, value: string | number) => {
-    if (!parsedItems) return
-    const updated = [...parsedItems]
-    const item = updated[index]
+  const handleEditChange = (field: keyof FoodItem, value: string | number) => {
+    if (!editedValues) return
     
     if (field === 'name') {
-      item.name = value as string
+      setEditedValues({ ...editedValues, name: value as string })
     } else if (field === 'weight') {
       // Recalculate all nutritional values proportionally when weight changes
       const newWeight = typeof value === 'string' ? parseFloat(value) || 0 : value
-      const oldWeight = item.weight || 1
+      const oldWeight = editedValues.weight || 1
       const ratio = newWeight / oldWeight
       
-      item.weight = Math.round(newWeight)
-      item.calories = Math.round(item.calories * ratio)
-      item.protein = Math.round(item.protein * ratio)
-      item.fat = Math.round(item.fat * ratio)
-      item.carbs = Math.round(item.carbs * ratio)
+      setEditedValues({
+        ...editedValues,
+        weight: Math.round(newWeight),
+        calories: Math.round(editedValues.calories * ratio),
+        protein: Math.round(editedValues.protein * ratio),
+        fat: Math.round(editedValues.fat * ratio),
+        carbs: Math.round(editedValues.carbs * ratio),
+      })
     } else if (field === 'protein' || field === 'fat' || field === 'carbs') {
       // Update the macro and recalculate calories from all macros
       const newVal = typeof value === 'string' ? Math.round(parseFloat(value) || 0) : Math.round(value)
-      item[field] = newVal
-      const p = field === 'protein' ? newVal : item.protein
-      const f = field === 'fat' ? newVal : item.fat
-      const c = field === 'carbs' ? newVal : item.carbs
-      item.calories = Math.round(p * 4 + f * 9 + c * 4)
+      const p = field === 'protein' ? newVal : editedValues.protein
+      const f = field === 'fat' ? newVal : editedValues.fat
+      const c = field === 'carbs' ? newVal : editedValues.carbs
+      setEditedValues({
+        ...editedValues,
+        [field]: newVal,
+        calories: Math.round(p * 4 + f * 9 + c * 4),
+      })
     } else {
-      item[field] = typeof value === 'string' ? Math.round(parseFloat(value) || 0) : Math.round(value)
+      setEditedValues({
+        ...editedValues,
+        [field]: typeof value === 'string' ? Math.round(parseFloat(value) || 0) : Math.round(value),
+      })
+    }
+  }
+
+  const saveEdit = async () => {
+    if (!editingItem || !editedValues) return
+    
+    const log = logs.find(l => l.id === editingItem.logId)
+    if (!log) return
+    
+    const updatedItems = [...log.items]
+    updatedItems[editingItem.itemIndex] = editedValues
+    
+    const updatedLog: FoodLog = {
+      ...log,
+      items: updatedItems,
     }
     
-    setParsedItems(updated)
+    await saveFoodLog(updatedLog)
+    cancelEditing()
+    onDelete() // Trigger refresh
   }
 
-  const handleRemoveItem = (index: number) => {
-    if (!parsedItems) return
-    const updated = parsedItems.filter((_, i) => i !== index)
-    setParsedItems(updated.length > 0 ? updated : null)
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString)
+    return date.toLocaleDateString('ru-RU', {
+      hour: '2-digit',
+      minute: '2-digit',
+    })
   }
 
-  const handleSaveToDatabase = async (item: FoodItem) => {
-    if (!user) return
+  const formatDayHeader = (dateString: string) => {
+    const date = new Date(dateString)
+    const isToday = dateString === today
+    const yesterday = new Date()
+    yesterday.setDate(yesterday.getDate() - 1)
+    const isYesterday = dateString === yesterday.toISOString().split('T')[0]
     
-    // Check if already exists
-    const existing = savedFoods.find(f => 
-      f.name.toLowerCase() === item.name.toLowerCase() && f.userId === user.id
+    if (isToday) return 'Сегодня'
+    if (isYesterday) return 'Вчера'
+    
+    return date.toLocaleDateString('ru-RU', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+    })
+  }
+
+  const groupedLogs = logs.reduce((acc, log) => {
+    const date = log.date
+    if (!acc[date]) {
+      acc[date] = []
+    }
+    acc[date].push(log)
+    return acc
+  }, {} as Record<string, FoodLog[]>)
+
+  const sortedDates = Object.keys(groupedLogs).sort(
+    (a, b) => new Date(b).getTime() - new Date(a).getTime()
+  )
+
+  if (logs.length === 0) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center">
+          <Utensils className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+          <p className="text-muted-foreground">Записей о питании пока нет</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            Добавьте первую запись выше
+          </p>
+        </CardContent>
+      </Card>
     )
-    
-    if (existing) {
-      // Update existing
-      const updated: SavedFood = {
-        ...existing,
-        weight: item.weight,
-        calories: item.calories,
-        protein: item.protein,
-        fat: item.fat,
-        carbs: item.carbs,
-        useCount: existing.useCount + 1,
-        lastUsed: new Date().toISOString(),
-      }
-      await saveSavedFood(updated)
-      setSavedFoods(prev => prev.map(f => f.id === existing.id ? updated : f))
-    } else {
-      // Create new
-      const newSavedFood: SavedFood = {
-        id: crypto.randomUUID(),
-        userId: user.id,
-        name: item.name,
-        weight: item.weight,
-        calories: item.calories,
-        protein: item.protein,
-        fat: item.fat,
-        carbs: item.carbs,
-        useCount: 1,
-        lastUsed: new Date().toISOString(),
-        createdAt: new Date().toISOString(),
-      }
-      await saveSavedFood(newSavedFood)
-      setSavedFoods(prev => [newSavedFood, ...prev])
-    }
   }
-
-  const handleSave = async () => {
-    if (!parsedItems || !user) return
-
-    const foodLog: FoodLog = {
-      id: crypto.randomUUID(),
-      userId: user.id,
-      items: parsedItems.map(({ isEditing, ...item }) => item),
-      rawInput: input || 'Быстрое добавление',
-      date: new Date().toISOString().split('T')[0],
-      createdAt: new Date().toISOString(),
-    }
-
-    await saveFoodLog(foodLog)
-    
-    // Save all items to user's food database
-    for (const item of parsedItems) {
-      await handleSaveToDatabase(item)
-    }
-    
-    setInput('')
-    setParsedItems(null)
-    onFoodAdded()
-  }
-
-  const totalCalories = parsedItems?.reduce((sum, item) => sum + item.calories, 0) || 0
-  const totalProtein = parsedItems?.reduce((sum, item) => sum + item.protein, 0) || 0
-  const totalFat = parsedItems?.reduce((sum, item) => sum + item.fat, 0) || 0
-  const totalCarbs = parsedItems?.reduce((sum, item) => sum + item.carbs, 0) || 0
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Plus className="h-5 w-5" />
-          Добавить еду
-        </CardTitle>
-        <CardDescription>
-          Опишите что вы съели или выберите из истории
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {/* Input with autocomplete */}
-        <div className="relative" ref={suggestionsRef}>
-          <Textarea
-            ref={inputRef}
-            placeholder="Например: курица гриль 150г + салат с огурцом..."
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault()
-                handleParse()
-              }
-            }}
-            rows={2}
-            disabled={isLoading}
-            className="pr-10"
-          />
-          
-          {/* Autocomplete dropdown */}
-          {showSuggestions && (
-            <div className="absolute z-50 w-full mt-1 bg-background border rounded-lg shadow-lg overflow-hidden">
-              <div className="p-2 text-xs text-muted-foreground border-b flex items-center gap-1">
-                <Clock className="h-3 w-3" />
-                Из вашей истории
-              </div>
-              {filteredSuggestions.map((food) => (
-                <button
-                  key={food.id}
-                  onClick={() => handleSelectSuggestion(food)}
-                  className="w-full px-3 py-2 text-left hover:bg-muted flex items-center justify-between transition-colors"
-                >
-                  <div>
-                    <div className="font-medium">{food.name}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {food.weight}г • {food.calories} ккал
+    <div className="space-y-3">
+      {sortedDates.map((date) => {
+        const dayLogs = groupedLogs[date]
+        const isExpanded = expandedDays.has(date)
+        const isToday = date === today
+        
+        const dayCalories = dayLogs.reduce(
+          (sum, log) => sum + log.items.reduce((s, item) => s + item.calories, 0),
+          0
+        )
+        const dayProtein = dayLogs.reduce(
+          (sum, log) => sum + log.items.reduce((s, item) => s + item.protein, 0),
+          0
+        )
+        const dayFat = dayLogs.reduce(
+          (sum, log) => sum + log.items.reduce((s, item) => s + item.fat, 0),
+          0
+        )
+        const dayCarbs = dayLogs.reduce(
+          (sum, log) => sum + log.items.reduce((s, item) => s + item.carbs, 0),
+          0
+        )
+
+        return (
+          <Collapsible
+            key={date}
+            open={isExpanded}
+            onOpenChange={() => toggleDay(date)}
+          >
+            <Card className={isToday ? 'border-primary/30' : ''}>
+              <CollapsibleTrigger asChild>
+                <button className="w-full p-4 flex items-center justify-between hover:bg-muted/50 transition-colors rounded-t-lg">
+                  <div className="flex items-center gap-3">
+                    {isExpanded ? (
+                      <ChevronDown className="h-5 w-5 text-muted-foreground" />
+                    ) : (
+                      <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                    )}
+                    <div className="text-left">
+                      <div className="font-semibold flex items-center gap-2">
+                        {formatDayHeader(date)}
+                        {isToday && (
+                          <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">
+                            Сегодня
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        {dayLogs.length} {dayLogs.length === 1 ? 'прием' : dayLogs.length < 5 ? 'приема' : 'приемов'} пищи
+                      </div>
                     </div>
                   </div>
-                  <div className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Star className="h-3 w-3" />
-                    {food.useCount}
+                  <div className="text-right">
+                    <div className="font-bold text-lg">{dayCalories} ккал</div>
+                    <div className="text-xs text-muted-foreground">
+                      Б: {dayProtein.toFixed(0)}г | Ж: {dayFat.toFixed(0)}г | У: {dayCarbs.toFixed(0)}г
+                    </div>
                   </div>
                 </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="flex gap-2">
-          <Button 
-            onClick={handleParse} 
-            disabled={isLoading || !input.trim()} 
-            className="flex-1"
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Анализирую...
-              </>
-            ) : (
-              <>
-                <Search className="mr-2 h-4 w-4" />
-                Распознать
-              </>
-            )}
-          </Button>
-        </div>
-
-        {/* Quick add from frequent foods */}
-        {savedFoods.length > 0 && !parsedItems && (
-          <div className="space-y-2">
-            <div className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
-              <Star className="h-4 w-4" />
-              Частые продукты
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {savedFoods.slice(0, 6).map((food) => (
-                <button
-                  key={food.id}
-                  onClick={() => handleSelectSuggestion(food)}
-                  className="px-3 py-1.5 text-sm bg-muted hover:bg-muted/80 rounded-full transition-colors flex items-center gap-1"
-                >
-                  {food.name}
-                  <span className="text-xs text-muted-foreground">({food.calories})</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {error && (
-          <p className="text-sm text-destructive p-3 bg-destructive/10 rounded-lg">
-            {error}
-          </p>
-        )}
-
-        {/* Parsed items with edit capability */}
-        {parsedItems && parsedItems.length > 0 && (
-          <div className="space-y-4">
-            <div className="rounded-lg border overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-muted">
-                  <tr>
-                    <th className="text-left p-3 font-medium">Продукт</th>
-                    <th className="text-right p-3 font-medium w-20">Вес</th>
-                    <th className="text-right p-3 font-medium w-20">Ккал</th>
-                    <th className="text-right p-3 font-medium hidden sm:table-cell">Б/Ж/У</th>
-                    <th className="p-3 w-20"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {parsedItems.map((item, index) => (
-                    <tr key={index} className="border-t">
-                      {item.isEditing ? (
-                        <>
-                          <td className="p-2">
-                            <Input
-                              value={item.name}
-                              onChange={(e) => handleUpdateItem(index, 'name', e.target.value)}
-                              className="h-8"
-                            />
-                          </td>
-                          <td className="p-2">
-                            <Input
-                              type="number"
-                              value={item.weight}
-                              onChange={(e) => handleUpdateItem(index, 'weight', e.target.value)}
-                              className="h-8 w-16 text-right"
-                            />
-                          </td>
-                          <td className="p-2">
-                            <Input
-                              type="number"
-                              value={item.calories}
-                              onChange={(e) => handleUpdateItem(index, 'calories', e.target.value)}
-                              className="h-8 w-16 text-right"
-                            />
-                          </td>
-                          <td className="p-2 hidden sm:table-cell">
-                            <div className="flex gap-1 items-center">
-                              <Input
-                                type="number"
-                                value={item.protein}
-                                onChange={(e) => handleUpdateItem(index, 'protein', e.target.value)}
-                                className="h-8 w-14 text-right text-xs"
-                                title="Белки"
-                              />
-                              <span className="text-[10px] text-muted-foreground">/</span>
-                              <Input
-                                type="number"
-                                value={item.fat}
-                                onChange={(e) => handleUpdateItem(index, 'fat', e.target.value)}
-                                className="h-8 w-14 text-right text-xs"
-                                title="Жиры"
-                              />
-                              <span className="text-[10px] text-muted-foreground">/</span>
-                              <Input
-                                type="number"
-                                value={item.carbs}
-                                onChange={(e) => handleUpdateItem(index, 'carbs', e.target.value)}
-                                className="h-8 w-14 text-right text-xs"
-                                title="Углеводы"
-                              />
+              </CollapsibleTrigger>
+              
+              <CollapsibleContent>
+                <CardContent className="pt-0 space-y-3">
+                  {dayLogs.map((log) => (
+                    <div
+                      key={log.id}
+                      className="border rounded-lg p-3 space-y-2 bg-muted/20"
+                    >
+                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                        <span>{formatDate(log.createdAt)}</span>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDelete(log.id)}
+                          className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                      
+                      <div className="space-y-1">
+                        {log.items.map((item, index) => {
+                          const isEditingThis = editingItem?.logId === log.id && editingItem?.itemIndex === index
+                          
+                          if (isEditingThis && editedValues) {
+                            return (
+                              <div key={index} className="py-2 bg-background rounded px-3 space-y-2">
+                                <div className="flex items-center gap-2">
+                                  <Input
+                                    value={editedValues.name}
+                                    onChange={(e) => handleEditChange('name', e.target.value)}
+                                    className="h-7 flex-1 text-sm"
+                                    placeholder="Название"
+                                  />
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 shrink-0"
+                                    onClick={resetEdit}
+                                    title="Сбросить изменения"
+                                  >
+                                    <RotateCcw className="h-3.5 w-3.5 text-muted-foreground" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 shrink-0"
+                                    onClick={saveEdit}
+                                  >
+                                    <Check className="h-4 w-4 text-green-600" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 shrink-0"
+                                    onClick={cancelEditing}
+                                  >
+                                    <X className="h-4 w-4 text-destructive" />
+                                  </Button>
+                                </div>
+                                <div className="grid grid-cols-5 gap-2">
+                                  <div>
+                                    <div className="text-[10px] text-muted-foreground mb-0.5">Вес, г</div>
+                                    <Input
+                                      type="number"
+                                      value={editedValues.weight}
+                                      onChange={(e) => handleEditChange('weight', e.target.value)}
+                                      className="h-7 text-sm text-right"
+                                    />
+                                  </div>
+                                  <div>
+                                    <div className="text-[10px] text-muted-foreground mb-0.5">Ккал</div>
+                                    <Input
+                                      type="number"
+                                      value={editedValues.calories}
+                                      onChange={(e) => handleEditChange('calories', e.target.value)}
+                                      className="h-7 text-sm text-right bg-muted/50"
+                                      readOnly
+                                    />
+                                  </div>
+                                  <div>
+                                    <div className="text-[10px] text-muted-foreground mb-0.5">Белки</div>
+                                    <Input
+                                      type="number"
+                                      value={editedValues.protein}
+                                      onChange={(e) => handleEditChange('protein', e.target.value)}
+                                      className="h-7 text-sm text-right"
+                                    />
+                                  </div>
+                                  <div>
+                                    <div className="text-[10px] text-muted-foreground mb-0.5">Жиры</div>
+                                    <Input
+                                      type="number"
+                                      value={editedValues.fat}
+                                      onChange={(e) => handleEditChange('fat', e.target.value)}
+                                      className="h-7 text-sm text-right"
+                                    />
+                                  </div>
+                                  <div>
+                                    <div className="text-[10px] text-muted-foreground mb-0.5">Углев.</div>
+                                    <Input
+                                      type="number"
+                                      value={editedValues.carbs}
+                                      onChange={(e) => handleEditChange('carbs', e.target.value)}
+                                      className="h-7 text-sm text-right"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            )
+                          }
+                          
+                          return (
+                            <div
+                              key={index}
+                              className="flex items-center justify-between text-sm py-1 group"
+                            >
+                              <div className="flex items-center gap-1.5">
+                                <span>{item.name}</span>
+                                {hasMissingMacros(item) && (
+                                  <span title="Нет данных о БЖУ">
+                                    <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                                  </span>
+                                )}
+                                <span className="text-muted-foreground">({item.weight}г)</span>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                  onClick={() => startEditing(log.id, index, item)}
+                                >
+                                  <Pencil className="h-3 w-3" />
+                                </Button>
+                              </div>
+                              <div className="text-right">
+                                <span className="font-medium">{item.calories} ккал</span>
+                                <span className="text-xs text-muted-foreground ml-2">
+                                  {Math.round(item.protein)}/{Math.round(item.fat)}/{Math.round(item.carbs)}
+                                </span>
+                              </div>
                             </div>
-                          </td>
-                          <td className="p-2">
-                            <div className="flex gap-1">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7"
-                                onClick={() => handleCancelEdit(index)}
-                              >
-                                <Check className="h-4 w-4 text-green-600" />
-                              </Button>
-                            </div>
-                          </td>
-                        </>
-                      ) : (
-                        <>
-                          <td className="p-3">{item.name}</td>
-                          <td className="text-right p-3">{item.weight}г</td>
-                          <td className="text-right p-3 font-medium">{item.calories}</td>
-                          <td className="text-right p-3 text-muted-foreground hidden sm:table-cell">
-                            {Math.round(item.protein)}/{Math.round(item.fat)}/{Math.round(item.carbs)}
-                          </td>
-                          <td className="p-2">
-                            <div className="flex gap-1">
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7"
-                                onClick={() => handleEditItem(index)}
-                                title="Редактировать"
-                              >
-                                <Pencil className="h-3 w-3" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 text-destructive"
-                                onClick={() => handleRemoveItem(index)}
-                                title="Удалить"
-                              >
-                                <X className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          </td>
-                        </>
-                      )}
-                    </tr>
+                          )
+                        })}
+                      </div>
+                    </div>
                   ))}
-                </tbody>
-                <tfoot className="bg-muted/50 font-medium">
-                  <tr className="border-t">
-                    <td className="p-3">Итого</td>
-                    <td className="text-right p-3">-</td>
-                    <td className="text-right p-3 text-primary">{totalCalories}</td>
-                    <td className="text-right p-3 hidden sm:table-cell">
-                      {Math.round(totalProtein)}/{Math.round(totalFat)}/{Math.round(totalCarbs)}
-                    </td>
-                    <td></td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-            
-            {/* Mobile macro display */}
-            <div className="grid grid-cols-4 gap-2 sm:hidden">
-              <div className="text-center p-2 bg-muted rounded-lg">
-                <div className="text-xs text-muted-foreground">Белки</div>
-                <div className="font-medium">{Math.round(totalProtein)}г</div>
-              </div>
-              <div className="text-center p-2 bg-muted rounded-lg">
-                <div className="text-xs text-muted-foreground">Жиры</div>
-                <div className="font-medium">{Math.round(totalFat)}г</div>
-              </div>
-              <div className="text-center p-2 bg-muted rounded-lg">
-                <div className="text-xs text-muted-foreground">Углеводы</div>
-                <div className="font-medium">{Math.round(totalCarbs)}г</div>
-              </div>
-              <div className="text-center p-2 bg-primary/10 rounded-lg">
-                <div className="text-xs text-muted-foreground">Ккал</div>
-                <div className="font-medium text-primary">{totalCalories}</div>
-              </div>
-            </div>
-
-            <div className="flex gap-2">
-              <Button onClick={handleSave} className="flex-1">
-                <Bookmark className="mr-2 h-4 w-4" />
-                Сохранить
-              </Button>
-              <Button 
-                variant="outline" 
-                onClick={() => setParsedItems(null)}
-                className="bg-transparent"
-              >
-                Отмена
-              </Button>
-            </div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+                </CardContent>
+              </CollapsibleContent>
+            </Card>
+          </Collapsible>
+        )
+      })}
+    </div>
   )
 }

@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/collapsible'
 import type { FoodLog, FoodItem } from '@/lib/types'
 import { deleteFoodLog, saveFoodLog } from '@/lib/api-storage'
-import { Trash2, Utensils, ChevronDown, ChevronRight, Pencil, Check, X } from 'lucide-react'
+import { Trash2, Utensils, ChevronDown, ChevronRight, Pencil, Check, X, RotateCcw, AlertTriangle } from 'lucide-react'
 
 interface FoodLogListProps {
   logs: FoodLog[]
@@ -23,6 +23,10 @@ interface EditingState {
   itemIndex: number
 }
 
+function hasMissingMacros(item: FoodItem): boolean {
+  return item.calories > 0 && item.protein === 0 && item.fat === 0 && item.carbs === 0
+}
+
 export function FoodLogList({ logs, onDelete }: FoodLogListProps) {
   const today = new Date().toISOString().split('T')[0]
   
@@ -30,6 +34,7 @@ export function FoodLogList({ logs, onDelete }: FoodLogListProps) {
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set([today]))
   const [editingItem, setEditingItem] = useState<EditingState | null>(null)
   const [editedValues, setEditedValues] = useState<FoodItem | null>(null)
+  const [originalValues, setOriginalValues] = useState<FoodItem | null>(null)
 
   const handleDelete = async (logId: string) => {
     await deleteFoodLog(logId)
@@ -51,11 +56,19 @@ export function FoodLogList({ logs, onDelete }: FoodLogListProps) {
   const startEditing = (logId: string, itemIndex: number, item: FoodItem) => {
     setEditingItem({ logId, itemIndex })
     setEditedValues({ ...item })
+    setOriginalValues({ ...item })
   }
 
   const cancelEditing = () => {
     setEditingItem(null)
     setEditedValues(null)
+    setOriginalValues(null)
+  }
+
+  const resetEdit = () => {
+    if (originalValues) {
+      setEditedValues({ ...originalValues })
+    }
   }
 
   const handleEditChange = (field: keyof FoodItem, value: string | number) => {
@@ -266,6 +279,15 @@ export function FoodLogList({ logs, onDelete }: FoodLogListProps) {
                                     variant="ghost"
                                     size="icon"
                                     className="h-7 w-7 shrink-0"
+                                    onClick={resetEdit}
+                                    title="Сбросить изменения"
+                                  >
+                                    <RotateCcw className="h-3.5 w-3.5 text-muted-foreground" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 shrink-0"
                                     onClick={saveEdit}
                                   >
                                     <Check className="h-4 w-4 text-green-600" />
@@ -336,8 +358,13 @@ export function FoodLogList({ logs, onDelete }: FoodLogListProps) {
                               key={index}
                               className="flex items-center justify-between text-sm py-1 group"
                             >
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-1.5">
                                 <span>{item.name}</span>
+                                {hasMissingMacros(item) && (
+                                  <span title="Нет данных о БЖУ">
+                                    <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                                  </span>
+                                )}
                                 <span className="text-muted-foreground">({item.weight}г)</span>
                                 <Button
                                   variant="ghost"
