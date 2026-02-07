@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import type { FoodLog, UserProfile } from '@/lib/types'
 import { Loader2, Sparkles } from 'lucide-react'
-import ReactMarkdown from 'react-markdown' // Import ReactMarkdown
+import { SimpleMarkdown } from '@/components/ui/simple-markdown'
 
 interface WeeklyReviewProps {
   logs: FoodLog[]
@@ -144,7 +144,7 @@ export function WeeklyReview({ logs, profile }: WeeklyReviewProps) {
               <Sparkles className="h-4 w-4 text-primary" />
               Рекомендации ИИ
             </h4>
-            <div className="text-sm whitespace-pre-wrap">{recommendation}</div>
+            <SimpleMarkdown content={recommendation} />
           </div>
         )}
       </CardContent>

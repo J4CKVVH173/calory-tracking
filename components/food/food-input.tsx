@@ -153,13 +153,21 @@ export function FoodInput({ onFoodAdded }: FoodInputProps) {
       const oldWeight = item.weight || 1
       const ratio = newWeight / oldWeight
       
-      item.weight = newWeight
+      item.weight = Math.round(newWeight)
       item.calories = Math.round(item.calories * ratio)
-      item.protein = Math.round(item.protein * ratio * 10) / 10
-      item.fat = Math.round(item.fat * ratio * 10) / 10
-      item.carbs = Math.round(item.carbs * ratio * 10) / 10
+      item.protein = Math.round(item.protein * ratio)
+      item.fat = Math.round(item.fat * ratio)
+      item.carbs = Math.round(item.carbs * ratio)
+    } else if (field === 'protein' || field === 'fat' || field === 'carbs') {
+      // Update the macro and recalculate calories from all macros
+      const newVal = typeof value === 'string' ? Math.round(parseFloat(value) || 0) : Math.round(value)
+      item[field] = newVal
+      const p = field === 'protein' ? newVal : item.protein
+      const f = field === 'fat' ? newVal : item.fat
+      const c = field === 'carbs' ? newVal : item.carbs
+      item.calories = Math.round(p * 4 + f * 9 + c * 4)
     } else {
-      item[field] = typeof value === 'string' ? parseFloat(value) || 0 : value
+      item[field] = typeof value === 'string' ? Math.round(parseFloat(value) || 0) : Math.round(value)
     }
     
     setParsedItems(updated)
@@ -359,7 +367,7 @@ export function FoodInput({ onFoodAdded }: FoodInputProps) {
                     <th className="text-left p-3 font-medium">Продукт</th>
                     <th className="text-right p-3 font-medium w-20">Вес</th>
                     <th className="text-right p-3 font-medium w-20">Ккал</th>
-                    <th className="text-right p-3 font-medium hidden sm:table-cell w-28">Б/Ж/У</th>
+                    <th className="text-right p-3 font-medium hidden sm:table-cell">Б/Ж/У</th>
                     <th className="p-3 w-20"></th>
                   </tr>
                 </thead>
@@ -392,26 +400,28 @@ export function FoodInput({ onFoodAdded }: FoodInputProps) {
                             />
                           </td>
                           <td className="p-2 hidden sm:table-cell">
-                            <div className="flex gap-1">
+                            <div className="flex gap-1 items-center">
                               <Input
                                 type="number"
                                 value={item.protein}
                                 onChange={(e) => handleUpdateItem(index, 'protein', e.target.value)}
-                                className="h-8 w-12 text-right text-xs"
+                                className="h-8 w-14 text-right text-xs"
                                 title="Белки"
                               />
+                              <span className="text-[10px] text-muted-foreground">/</span>
                               <Input
                                 type="number"
                                 value={item.fat}
                                 onChange={(e) => handleUpdateItem(index, 'fat', e.target.value)}
-                                className="h-8 w-12 text-right text-xs"
+                                className="h-8 w-14 text-right text-xs"
                                 title="Жиры"
                               />
+                              <span className="text-[10px] text-muted-foreground">/</span>
                               <Input
                                 type="number"
                                 value={item.carbs}
                                 onChange={(e) => handleUpdateItem(index, 'carbs', e.target.value)}
-                                className="h-8 w-12 text-right text-xs"
+                                className="h-8 w-14 text-right text-xs"
                                 title="Углеводы"
                               />
                             </div>
@@ -435,7 +445,7 @@ export function FoodInput({ onFoodAdded }: FoodInputProps) {
                           <td className="text-right p-3">{item.weight}г</td>
                           <td className="text-right p-3 font-medium">{item.calories}</td>
                           <td className="text-right p-3 text-muted-foreground hidden sm:table-cell">
-                            {item.protein}/{item.fat}/{item.carbs}
+                            {Math.round(item.protein)}/{Math.round(item.fat)}/{Math.round(item.carbs)}
                           </td>
                           <td className="p-2">
                             <div className="flex gap-1">
@@ -470,7 +480,7 @@ export function FoodInput({ onFoodAdded }: FoodInputProps) {
                     <td className="text-right p-3">-</td>
                     <td className="text-right p-3 text-primary">{totalCalories}</td>
                     <td className="text-right p-3 hidden sm:table-cell">
-                      {totalProtein.toFixed(1)}/{totalFat.toFixed(1)}/{totalCarbs.toFixed(1)}
+                      {Math.round(totalProtein)}/{Math.round(totalFat)}/{Math.round(totalCarbs)}
                     </td>
                     <td></td>
                   </tr>
@@ -482,15 +492,15 @@ export function FoodInput({ onFoodAdded }: FoodInputProps) {
             <div className="grid grid-cols-4 gap-2 sm:hidden">
               <div className="text-center p-2 bg-muted rounded-lg">
                 <div className="text-xs text-muted-foreground">Белки</div>
-                <div className="font-medium">{totalProtein.toFixed(1)}г</div>
+                <div className="font-medium">{Math.round(totalProtein)}г</div>
               </div>
               <div className="text-center p-2 bg-muted rounded-lg">
                 <div className="text-xs text-muted-foreground">Жиры</div>
-                <div className="font-medium">{totalFat.toFixed(1)}г</div>
+                <div className="font-medium">{Math.round(totalFat)}г</div>
               </div>
               <div className="text-center p-2 bg-muted rounded-lg">
                 <div className="text-xs text-muted-foreground">Углеводы</div>
-                <div className="font-medium">{totalCarbs.toFixed(1)}г</div>
+                <div className="font-medium">{Math.round(totalCarbs)}г</div>
               </div>
               <div className="text-center p-2 bg-primary/10 rounded-lg">
                 <div className="text-xs text-muted-foreground">Ккал</div>

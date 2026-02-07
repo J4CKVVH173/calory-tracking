@@ -20,7 +20,7 @@ import { getProfileByUserId, saveProfile, saveWeightEntry } from '@/lib/api-stor
 import type { UserProfile, NutritionGoals } from '@/lib/types'
 import { lifestyleOptions, genderOptions } from '@/lib/types'
 import { Loader2, Save, Sparkles, Pencil, Check, X, Target } from 'lucide-react'
-import ReactMarkdown from 'react-markdown'
+import { SimpleMarkdown } from '@/components/ui/simple-markdown'
 
 export function ProfileForm() {
   const { user } = useAuth()
@@ -508,7 +508,7 @@ export function ProfileForm() {
                 placeholder="Введите ваш план в формате Markdown..."
               />
             ) : (
-              <div className="text-sm whitespace-pre-wrap">{aiPlan}</div>
+              <SimpleMarkdown content={aiPlan} />
             )}
           </CardContent>
         </Card>

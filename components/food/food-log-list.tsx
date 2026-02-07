@@ -71,16 +71,27 @@ export function FoodLogList({ logs, onDelete }: FoodLogListProps) {
       
       setEditedValues({
         ...editedValues,
-        weight: newWeight,
+        weight: Math.round(newWeight),
         calories: Math.round(editedValues.calories * ratio),
-        protein: Math.round(editedValues.protein * ratio * 10) / 10,
-        fat: Math.round(editedValues.fat * ratio * 10) / 10,
-        carbs: Math.round(editedValues.carbs * ratio * 10) / 10,
+        protein: Math.round(editedValues.protein * ratio),
+        fat: Math.round(editedValues.fat * ratio),
+        carbs: Math.round(editedValues.carbs * ratio),
+      })
+    } else if (field === 'protein' || field === 'fat' || field === 'carbs') {
+      // Update the macro and recalculate calories from all macros
+      const newVal = typeof value === 'string' ? Math.round(parseFloat(value) || 0) : Math.round(value)
+      const p = field === 'protein' ? newVal : editedValues.protein
+      const f = field === 'fat' ? newVal : editedValues.fat
+      const c = field === 'carbs' ? newVal : editedValues.carbs
+      setEditedValues({
+        ...editedValues,
+        [field]: newVal,
+        calories: Math.round(p * 4 + f * 9 + c * 4),
       })
     } else {
       setEditedValues({
         ...editedValues,
-        [field]: typeof value === 'string' ? parseFloat(value) || 0 : value,
+        [field]: typeof value === 'string' ? Math.round(parseFloat(value) || 0) : Math.round(value),
       })
     }
   }
@@ -243,42 +254,79 @@ export function FoodLogList({ logs, onDelete }: FoodLogListProps) {
                           
                           if (isEditingThis && editedValues) {
                             return (
-                              <div key={index} className="flex items-center gap-2 py-1 bg-background rounded px-2">
-                                <Input
-                                  value={editedValues.name}
-                                  onChange={(e) => handleEditChange('name', e.target.value)}
-                                  className="h-7 flex-1 text-sm"
-                                />
-                                <Input
-                                  type="number"
-                                  value={editedValues.weight}
-                                  onChange={(e) => handleEditChange('weight', e.target.value)}
-                                  className="h-7 w-16 text-sm text-right"
-                                />
-                                <span className="text-xs text-muted-foreground">г</span>
-                                <Input
-                                  type="number"
-                                  value={editedValues.calories}
-                                  onChange={(e) => handleEditChange('calories', e.target.value)}
-                                  className="h-7 w-16 text-sm text-right"
-                                />
-                                <span className="text-xs text-muted-foreground">ккал</span>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-6 w-6"
-                                  onClick={saveEdit}
-                                >
-                                  <Check className="h-3 w-3 text-green-600" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-6 w-6"
-                                  onClick={cancelEditing}
-                                >
-                                  <X className="h-3 w-3 text-destructive" />
-                                </Button>
+                              <div key={index} className="py-2 bg-background rounded px-3 space-y-2">
+                                <div className="flex items-center gap-2">
+                                  <Input
+                                    value={editedValues.name}
+                                    onChange={(e) => handleEditChange('name', e.target.value)}
+                                    className="h-7 flex-1 text-sm"
+                                    placeholder="Название"
+                                  />
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 shrink-0"
+                                    onClick={saveEdit}
+                                  >
+                                    <Check className="h-4 w-4 text-green-600" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-7 w-7 shrink-0"
+                                    onClick={cancelEditing}
+                                  >
+                                    <X className="h-4 w-4 text-destructive" />
+                                  </Button>
+                                </div>
+                                <div className="grid grid-cols-5 gap-2">
+                                  <div>
+                                    <div className="text-[10px] text-muted-foreground mb-0.5">Вес, г</div>
+                                    <Input
+                                      type="number"
+                                      value={editedValues.weight}
+                                      onChange={(e) => handleEditChange('weight', e.target.value)}
+                                      className="h-7 text-sm text-right"
+                                    />
+                                  </div>
+                                  <div>
+                                    <div className="text-[10px] text-muted-foreground mb-0.5">Ккал</div>
+                                    <Input
+                                      type="number"
+                                      value={editedValues.calories}
+                                      onChange={(e) => handleEditChange('calories', e.target.value)}
+                                      className="h-7 text-sm text-right bg-muted/50"
+                                      readOnly
+                                    />
+                                  </div>
+                                  <div>
+                                    <div className="text-[10px] text-muted-foreground mb-0.5">Белки</div>
+                                    <Input
+                                      type="number"
+                                      value={editedValues.protein}
+                                      onChange={(e) => handleEditChange('protein', e.target.value)}
+                                      className="h-7 text-sm text-right"
+                                    />
+                                  </div>
+                                  <div>
+                                    <div className="text-[10px] text-muted-foreground mb-0.5">Жиры</div>
+                                    <Input
+                                      type="number"
+                                      value={editedValues.fat}
+                                      onChange={(e) => handleEditChange('fat', e.target.value)}
+                                      className="h-7 text-sm text-right"
+                                    />
+                                  </div>
+                                  <div>
+                                    <div className="text-[10px] text-muted-foreground mb-0.5">Углев.</div>
+                                    <Input
+                                      type="number"
+                                      value={editedValues.carbs}
+                                      onChange={(e) => handleEditChange('carbs', e.target.value)}
+                                      className="h-7 text-sm text-right"
+                                    />
+                                  </div>
+                                </div>
                               </div>
                             )
                           }
@@ -303,7 +351,7 @@ export function FoodLogList({ logs, onDelete }: FoodLogListProps) {
                               <div className="text-right">
                                 <span className="font-medium">{item.calories} ккал</span>
                                 <span className="text-xs text-muted-foreground ml-2">
-                                  {item.protein.toFixed(0)}/{item.fat.toFixed(0)}/{item.carbs.toFixed(0)}
+                                  {Math.round(item.protein)}/{Math.round(item.fat)}/{Math.round(item.carbs)}
                                 </span>
                               </div>
                             </div>
