@@ -177,7 +177,7 @@ export function FoodLogList({ logs, onDelete }: FoodLogListProps) {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2 sm:space-y-3">
       {sortedDates.map((date) => {
         const dayLogs = groupedLogs[date]
         const isExpanded = expandedDays.has(date)
@@ -208,7 +208,7 @@ export function FoodLogList({ logs, onDelete }: FoodLogListProps) {
           >
             <Card className={isToday ? 'border-primary/30' : ''}>
               <CollapsibleTrigger asChild>
-                <button className="w-full p-4 flex items-center justify-between hover:bg-muted/50 transition-colors rounded-t-lg">
+                <button className="w-full px-3 py-3 sm:p-4 flex items-center justify-between hover:bg-muted/50 transition-colors rounded-t-lg">
                   <div className="flex items-center gap-3">
                     {isExpanded ? (
                       <ChevronDown className="h-5 w-5 text-muted-foreground" />
@@ -230,8 +230,8 @@ export function FoodLogList({ logs, onDelete }: FoodLogListProps) {
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="font-bold text-lg">{dayCalories} ккал</div>
-                    <div className="text-xs text-muted-foreground">
+                    <div className="font-bold text-base sm:text-lg">{dayCalories} ккал</div>
+                    <div className="text-[10px] sm:text-xs text-muted-foreground">
                       Б: {dayProtein.toFixed(0)}г | Ж: {dayFat.toFixed(0)}г | У: {dayCarbs.toFixed(0)}г
                     </div>
                   </div>
@@ -239,11 +239,11 @@ export function FoodLogList({ logs, onDelete }: FoodLogListProps) {
               </CollapsibleTrigger>
               
               <CollapsibleContent>
-                <CardContent className="pt-0 space-y-3">
+                <CardContent className="pt-0 space-y-2 sm:space-y-3 px-3 sm:px-6">
                   {dayLogs.map((log) => (
                     <div
                       key={log.id}
-                      className="border rounded-lg p-3 space-y-2 bg-muted/20"
+                      className="border rounded-lg p-2 sm:p-3 space-y-1.5 sm:space-y-2 bg-muted/20"
                     >
                       <div className="flex items-center justify-between text-xs text-muted-foreground">
                         <span>{formatDate(log.createdAt)}</span>
