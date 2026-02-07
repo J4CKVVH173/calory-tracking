@@ -16,7 +16,7 @@ interface FoodInputProps {
 
 interface EditableFoodItem extends FoodItem {
   isEditing?: boolean
-  quantity: number
+  quantity?: number
 }
 
 function hasMissingMacros(item: FoodItem): boolean {
