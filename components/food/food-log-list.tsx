@@ -27,6 +27,12 @@ function hasMissingMacros(item: FoodItem): boolean {
   return item.calories > 0 && item.protein === 0 && item.fat === 0 && item.carbs === 0
 }
 
+function hasCalorieMismatch(item: FoodItem): boolean {
+  if (item.protein === 0 && item.fat === 0 && item.carbs === 0) return false
+  const calculated = Math.round(item.protein * 4 + item.fat * 9 + item.carbs * 4)
+  return Math.abs(item.calories - calculated) > 5
+}
+
 export function FoodLogList({ logs, onDelete }: FoodLogListProps) {
   const today = new Date().toISOString().split('T')[0]
   
@@ -90,18 +96,8 @@ export function FoodLogList({ logs, onDelete }: FoodLogListProps) {
         fat: Math.round(editedValues.fat * ratio),
         carbs: Math.round(editedValues.carbs * ratio),
       })
-    } else if (field === 'protein' || field === 'fat' || field === 'carbs') {
-      // Update the macro and recalculate calories from all macros
-      const newVal = typeof value === 'string' ? Math.round(parseFloat(value) || 0) : Math.round(value)
-      const p = field === 'protein' ? newVal : editedValues.protein
-      const f = field === 'fat' ? newVal : editedValues.fat
-      const c = field === 'carbs' ? newVal : editedValues.carbs
-      setEditedValues({
-        ...editedValues,
-        [field]: newVal,
-        calories: Math.round(p * 4 + f * 9 + c * 4),
-      })
     } else {
+      // For protein, fat, carbs, calories - just update the value directly
       setEditedValues({
         ...editedValues,
         [field]: typeof value === 'string' ? Math.round(parseFloat(value) || 0) : Math.round(value),
@@ -301,6 +297,16 @@ export function FoodLogList({ logs, onDelete }: FoodLogListProps) {
                                     <X className="h-4 w-4 text-destructive" />
                                   </Button>
                                 </div>
+                                {hasCalorieMismatch(editedValues) && (
+                                  <div className="flex items-center gap-1.5 text-xs text-amber-600 bg-amber-500/10 px-2 py-1 rounded">
+                                    <AlertTriangle className="h-3 w-3 shrink-0" />
+                                    <span>
+                                      {'Калории не совпадают с БЖУ (расчёт: '}
+                                      {Math.round(editedValues.protein * 4 + editedValues.fat * 9 + editedValues.carbs * 4)}
+                                      {' ккал)'}
+                                    </span>
+                                  </div>
+                                )}
                                 <div className="grid grid-cols-5 gap-2">
                                   <div>
                                     <div className="text-[10px] text-muted-foreground mb-0.5">Вес, г</div>
@@ -317,8 +323,7 @@ export function FoodLogList({ logs, onDelete }: FoodLogListProps) {
                                       type="number"
                                       value={editedValues.calories}
                                       onChange={(e) => handleEditChange('calories', e.target.value)}
-                                      className="h-7 text-sm text-right bg-muted/50"
-                                      readOnly
+                                      className={`h-7 text-sm text-right ${hasCalorieMismatch(editedValues) ? 'border-amber-500 focus-visible:ring-amber-500' : ''}`}
                                     />
                                   </div>
                                   <div>
@@ -362,6 +367,11 @@ export function FoodLogList({ logs, onDelete }: FoodLogListProps) {
                                 <span>{item.name}</span>
                                 {hasMissingMacros(item) && (
                                   <span title="Нет данных о БЖУ">
+                                    <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                                  </span>
+                                )}
+                                {hasCalorieMismatch(item) && (
+                                  <span title={`Калории не совпадают с БЖУ (расчёт: ${Math.round(item.protein * 4 + item.fat * 9 + item.carbs * 4)} ккал)`}>
                                     <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
                                   </span>
                                 )}
