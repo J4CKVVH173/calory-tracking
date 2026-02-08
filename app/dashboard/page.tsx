@@ -92,9 +92,9 @@ export default function DashboardPage() {
               </CardHeader>
               <CardContent>
                 <Link href="/profile">
-                  <Button className="w-full">
+                  <Button className="w-full h-12 text-base sm:h-10 sm:text-sm">
                     Заполнить профиль
-                    <ArrowRight className="ml-2 h-4 w-4" />
+                    <ArrowRight className="ml-2 h-5 w-5 sm:h-4 sm:w-4" />
                   </Button>
                 </Link>
               </CardContent>
@@ -113,9 +113,9 @@ export default function DashboardPage() {
               </CardHeader>
               <CardContent>
                 <Link href="/food">
-                  <Button variant="secondary" className="w-full">
+                  <Button variant="secondary" className="w-full h-12 text-base sm:h-10 sm:text-sm">
                     Добавить еду
-                    <ArrowRight className="ml-2 h-4 w-4" />
+                    <ArrowRight className="ml-2 h-5 w-5 sm:h-4 sm:w-4" />
                   </Button>
                 </Link>
               </CardContent>

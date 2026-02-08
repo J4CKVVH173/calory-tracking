@@ -49,6 +49,11 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
       setCameraError(null)
 
       try {
+        // Check if mediaDevices API is available (requires HTTPS / secure context)
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          throw new Error('NotSupported')
+        }
+
         const stream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: 'environment',
@@ -98,10 +103,14 @@ export function BarcodeScanner({ onScan, onClose }: BarcodeScannerProps) {
         if (cancelled) return
         setIsStarting(false)
         const msg = err instanceof Error ? err.message : 'Unknown error'
-        if (msg.includes('NotAllowed') || msg.includes('Permission')) {
+        if (msg.includes('NotSupported') || msg.includes('getUserMedia')) {
+          setCameraError('Камера недоступна. Убедитесь, что сайт открыт по HTTPS и ваш браузер поддерживает камеру.')
+        } else if (msg.includes('NotAllowed') || msg.includes('Permission')) {
           setCameraError('Доступ к камере запрещен. Разрешите доступ в настройках браузера.')
         } else if (msg.includes('NotFound') || msg.includes('DevicesNotFound')) {
           setCameraError('Камера не найдена на этом устройстве.')
+        } else if (msg.includes('NotReadableError') || msg.includes('TrackStartError')) {
+          setCameraError('Камера занята другим приложением. Закройте другие приложения и попробуйте снова.')
         } else {
           setCameraError(`Не удалось запустить камеру: ${msg}`)
         }

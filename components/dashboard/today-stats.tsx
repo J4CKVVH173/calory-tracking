@@ -91,7 +91,7 @@ export function TodayStats({ logs, profile }: TodayStatsProps) {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3 sm:space-y-6">
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+        <div className="flex flex-col gap-2 sm:grid sm:grid-cols-2 lg:grid-cols-4 sm:gap-4">
           {macros.map((macro) => {
             const Icon = macro.icon
             const progress = Math.min((macro.current / macro.target) * 100, 100)
@@ -101,40 +101,80 @@ export function TodayStats({ logs, profile }: TodayStatsProps) {
             return (
               <div
                 key={macro.label}
-                className={`p-2.5 sm:p-4 rounded-xl ${macro.bgColor}`}
+                className={`p-3 sm:p-4 rounded-xl ${macro.bgColor}`}
               >
-                <div className="flex items-center gap-1.5 sm:gap-2 mb-2 sm:mb-3">
-                  <Icon className={`h-4 w-4 sm:h-5 sm:w-5 ${macro.textColor}`} />
-                  <span className={`text-xs sm:text-sm font-medium ${macro.textColor}`}>{macro.label}</span>
-                </div>
-                
-                <div className="space-y-1.5 sm:space-y-2">
-                  <div className="flex items-end justify-between">
-                    <span className={`text-lg sm:text-2xl font-bold ${macro.textColor}`}>
-                      {macro.current}
-                    </span>
-                    <span className="text-[10px] sm:text-sm text-muted-foreground">
-                      / {macro.target} {macro.unit}
-                    </span>
+                {/* Mobile: horizontal row layout */}
+                <div className="flex items-center gap-3 sm:hidden">
+                  <div className={`rounded-full p-2 bg-background/30 shrink-0`}>
+                    <Icon className={`h-5 w-5 ${macro.textColor}`} />
                   </div>
-                  
-                  <div className="h-2 rounded-full bg-background/50 overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all duration-500 ${macro.color}`}
-                      style={{ width: `${progress}%` }}
-                    />
-                  </div>
-                  
-                  <div className="text-xs text-muted-foreground">
-                    {isOver ? (
-                      <span className="text-destructive font-medium">
-                        Превышено на {Math.abs(remaining)} {macro.unit}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-baseline justify-between mb-1">
+                      <span className={`text-sm font-medium ${macro.textColor}`}>{macro.label}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {isOver ? (
+                          <span className="text-destructive font-medium">
+                            +{Math.abs(remaining)} {macro.unit}
+                          </span>
+                        ) : remaining === 0 ? (
+                          <span className="text-primary font-medium">Цель!</span>
+                        ) : (
+                          <span>-{remaining} {macro.unit}</span>
+                        )}
                       </span>
-                    ) : remaining === 0 ? (
-                      <span className="text-primary font-medium">Цель достигнута!</span>
-                    ) : (
-                      <span>Осталось: {remaining} {macro.unit}</span>
-                    )}
+                    </div>
+                    <div className="flex items-baseline gap-1.5 mb-1.5">
+                      <span className={`text-2xl font-bold ${macro.textColor}`}>
+                        {macro.current}
+                      </span>
+                      <span className="text-sm text-muted-foreground">
+                        / {macro.target} {macro.unit}
+                      </span>
+                    </div>
+                    <div className="h-2 rounded-full bg-background/50 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${macro.color}`}
+                        style={{ width: `${progress}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Desktop: original stacked layout */}
+                <div className="hidden sm:block">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Icon className={`h-5 w-5 ${macro.textColor}`} />
+                    <span className={`text-sm font-medium ${macro.textColor}`}>{macro.label}</span>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <div className="flex items-end justify-between">
+                      <span className={`text-2xl font-bold ${macro.textColor}`}>
+                        {macro.current}
+                      </span>
+                      <span className="text-sm text-muted-foreground">
+                        / {macro.target} {macro.unit}
+                      </span>
+                    </div>
+                    
+                    <div className="h-2 rounded-full bg-background/50 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${macro.color}`}
+                        style={{ width: `${progress}%` }}
+                      />
+                    </div>
+                    
+                    <div className="text-xs text-muted-foreground">
+                      {isOver ? (
+                        <span className="text-destructive font-medium">
+                          Превышено на {Math.abs(remaining)} {macro.unit}
+                        </span>
+                      ) : remaining === 0 ? (
+                        <span className="text-primary font-medium">Цель достигнута!</span>
+                      ) : (
+                        <span>Осталось: {remaining} {macro.unit}</span>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
