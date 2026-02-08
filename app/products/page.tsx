@@ -22,6 +22,14 @@ import {
   ScanBarcode,
 } from 'lucide-react'
 
+/** Auto-calculate calories from macronutrients: P*4 + F*9 + C*4 */
+function calcCalories(protein: string | number, fat: string | number, carbs: string | number): number {
+  const p = typeof protein === 'string' ? parseFloat(protein) || 0 : protein
+  const f = typeof fat === 'string' ? parseFloat(fat) || 0 : fat
+  const c = typeof carbs === 'string' ? parseFloat(carbs) || 0 : carbs
+  return Math.round(p * 4 + f * 9 + c * 4)
+}
+
 type SortField = 'name' | 'calories' | 'protein' | 'useCount' | 'lastUsed'
 type SortDir = 'asc' | 'desc'
 
@@ -53,6 +61,8 @@ export default function ProductsPage() {
   const [isLookingUp, setIsLookingUp] = useState(false)
   const [scannedBarcode, setScannedBarcode] = useState<string | null>(null)
   const [lookupNotFound, setLookupNotFound] = useState(false)
+  const [autoCalcNew, setAutoCalcNew] = useState(true)
+  const [autoCalcEdit, setAutoCalcEdit] = useState(true)
   const [newProduct, setNewProduct] = useState({
     name: '',
     barcode: '',
@@ -62,6 +72,34 @@ export default function ProductsPage() {
     fat: '',
     carbs: '',
   })
+
+  // Auto-calculate calories when macros change (new product form)
+  const updateNewMacro = (field: 'protein' | 'fat' | 'carbs', value: string) => {
+    setNewProduct(prev => {
+      const updated = { ...prev, [field]: value }
+      if (autoCalcNew) {
+        updated.calories = String(calcCalories(updated.protein, updated.fat, updated.carbs))
+      }
+      return updated
+    })
+  }
+
+  // Auto-calculate calories when macros change (edit form)
+  const updateEditMacro = (field: 'protein' | 'fat' | 'carbs', value: string) => {
+    setEditValues(prev => {
+      if (!prev) return prev
+      const numVal = Math.round(parseFloat(value) || 0)
+      const updated = { ...prev, [field]: numVal }
+      if (autoCalcEdit) {
+        updated.calories = calcCalories(
+          updated.protein ?? 0,
+          updated.fat ?? 0,
+          updated.carbs ?? 0,
+        )
+      }
+      return updated
+    })
+  }
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -152,6 +190,7 @@ export default function ProductsPage() {
         fat: String(existing.fat),
         carbs: String(existing.carbs),
       })
+      setAutoCalcNew(false) // Real data from DB, don't auto-calc
       setIsLookingUp(false)
       return
     }
@@ -172,6 +211,7 @@ export default function ProductsPage() {
           fat: String(p.fat || ''),
           carbs: String(p.carbs || ''),
         })
+        setAutoCalcNew(false) // Real data from Open Food Facts
       } else {
         setLookupNotFound(true)
         setNewProduct(prev => ({
@@ -204,6 +244,9 @@ export default function ProductsPage() {
       fat: food.fat,
       carbs: food.carbs,
     })
+    // Enable auto-calc only if current calories roughly match the formula
+    const formulaCalories = calcCalories(food.protein, food.fat, food.carbs)
+    setAutoCalcEdit(Math.abs(food.calories - formulaCalories) <= 5)
   }
 
   const cancelEdit = () => {
@@ -265,6 +308,7 @@ export default function ProductsPage() {
     setShowAddForm(false)
     setScannedBarcode(null)
     setLookupNotFound(false)
+    setAutoCalcNew(true)
   }
 
   const SortButton = ({ field, label }: { field: SortField; label: string }) => (
@@ -396,15 +440,18 @@ export default function ProductsPage() {
                     />
                   </div>
                   <div>
-                    <div className="text-[10px] text-muted-foreground mb-0.5">Ккал</div>
+                    <div className="text-[10px] text-muted-foreground mb-0.5">
+                      Ккал {autoCalcNew && <span className="text-primary">*</span>}
+                    </div>
                     <Input
                       type="number"
                       placeholder="0"
                       value={newProduct.calories}
-                      onChange={e =>
+                      onChange={e => {
+                        setAutoCalcNew(false)
                         setNewProduct(prev => ({ ...prev, calories: e.target.value }))
-                      }
-                      className="text-sm"
+                      }}
+                      className={`text-sm ${autoCalcNew ? 'bg-muted/50' : ''}`}
                     />
                   </div>
                   <div>
@@ -413,9 +460,7 @@ export default function ProductsPage() {
                       type="number"
                       placeholder="0"
                       value={newProduct.protein}
-                      onChange={e =>
-                        setNewProduct(prev => ({ ...prev, protein: e.target.value }))
-                      }
+                      onChange={e => updateNewMacro('protein', e.target.value)}
                       className="text-sm"
                     />
                   </div>
@@ -425,9 +470,7 @@ export default function ProductsPage() {
                       type="number"
                       placeholder="0"
                       value={newProduct.fat}
-                      onChange={e =>
-                        setNewProduct(prev => ({ ...prev, fat: e.target.value }))
-                      }
+                      onChange={e => updateNewMacro('fat', e.target.value)}
                       className="text-sm"
                     />
                   </div>
@@ -437,13 +480,16 @@ export default function ProductsPage() {
                       type="number"
                       placeholder="0"
                       value={newProduct.carbs}
-                      onChange={e =>
-                        setNewProduct(prev => ({ ...prev, carbs: e.target.value }))
-                      }
+                      onChange={e => updateNewMacro('carbs', e.target.value)}
                       className="text-sm"
                     />
                   </div>
                 </div>
+                {autoCalcNew && (
+                  <p className="text-[11px] text-muted-foreground">
+                    <span className="text-primary">*</span> Калории рассчитываются автоматически по формуле: Б x 4 + Ж x 9 + У x 4
+                  </p>
+                )}
                 <div className="flex gap-2">
                   <Button
                     onClick={handleAddProduct}
@@ -616,20 +662,21 @@ export default function ProductsPage() {
                               </div>
                               <div>
                                 <div className="text-[10px] text-muted-foreground mb-0.5">
-                                  Ккал
+                                  Ккал {autoCalcEdit && <span className="text-primary">*</span>}
                                 </div>
                                 <Input
                                   type="number"
                                   value={editValues.calories ?? 0}
-                                  onChange={e =>
+                                  onChange={e => {
+                                    setAutoCalcEdit(false)
                                     setEditValues(prev => ({
                                       ...prev,
                                       calories: Math.round(
                                         parseFloat(e.target.value) || 0
                                       ),
                                     }))
-                                  }
-                                  className="h-8 text-sm text-right"
+                                  }}
+                                  className={`h-8 text-sm text-right ${autoCalcEdit ? 'bg-muted/50' : ''}`}
                                 />
                               </div>
                               <div>
@@ -639,14 +686,7 @@ export default function ProductsPage() {
                                 <Input
                                   type="number"
                                   value={editValues.protein ?? 0}
-                                  onChange={e =>
-                                    setEditValues(prev => ({
-                                      ...prev,
-                                      protein: Math.round(
-                                        parseFloat(e.target.value) || 0
-                                      ),
-                                    }))
-                                  }
+                                  onChange={e => updateEditMacro('protein', e.target.value)}
                                   className="h-8 text-sm text-right"
                                 />
                               </div>
@@ -657,14 +697,7 @@ export default function ProductsPage() {
                                 <Input
                                   type="number"
                                   value={editValues.fat ?? 0}
-                                  onChange={e =>
-                                    setEditValues(prev => ({
-                                      ...prev,
-                                      fat: Math.round(
-                                        parseFloat(e.target.value) || 0
-                                      ),
-                                    }))
-                                  }
+                                  onChange={e => updateEditMacro('fat', e.target.value)}
                                   className="h-8 text-sm text-right"
                                 />
                               </div>
@@ -675,14 +708,7 @@ export default function ProductsPage() {
                                 <Input
                                   type="number"
                                   value={editValues.carbs ?? 0}
-                                  onChange={e =>
-                                    setEditValues(prev => ({
-                                      ...prev,
-                                      carbs: Math.round(
-                                        parseFloat(e.target.value) || 0
-                                      ),
-                                    }))
-                                  }
+                                  onChange={e => updateEditMacro('carbs', e.target.value)}
                                   className="h-8 text-sm text-right"
                                 />
                               </div>
@@ -721,22 +747,22 @@ export default function ProductsPage() {
                         {food.useCount}
                       </td>
                       <td className="p-2">
-                        <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="flex gap-0.5 opacity-60 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-7 w-7"
+                            className="h-8 w-8 sm:h-7 sm:w-7"
                             onClick={() => startEdit(food)}
                           >
-                            <Pencil className="h-3 w-3" />
+                            <Pencil className="h-3.5 w-3.5 sm:h-3 sm:w-3" />
                           </Button>
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-7 w-7 text-destructive"
+                            className="h-8 w-8 sm:h-7 sm:w-7 text-destructive"
                             onClick={() => handleDelete(food.id)}
                           >
-                            <Trash2 className="h-3 w-3" />
+                            <Trash2 className="h-3.5 w-3.5 sm:h-3 sm:w-3" />
                           </Button>
                         </div>
                       </td>
