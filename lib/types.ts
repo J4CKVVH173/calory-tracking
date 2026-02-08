@@ -88,6 +88,7 @@ export interface SavedFood {
   id: string
   userId: string
   name: string
+  barcode?: string // EAN/UPC barcode
   weight: number // default serving size
   calories: number // per serving
   protein: number
