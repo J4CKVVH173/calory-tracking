@@ -33,6 +33,7 @@ export function ProfileForm() {
   const [editedPlan, setEditedPlan] = useState('')
   const [editedGoals, setEditedGoals] = useState<NutritionGoals>({ calories: 0, protein: 0, fat: 0, carbs: 0 })
   const [saveSuccess, setSaveSuccess] = useState(false)
+  const [generateError, setGenerateError] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     age: '',
     gender: 'male' as 'male' | 'female',
@@ -78,6 +79,12 @@ export function ProfileForm() {
     loadProfile()
   }, [user])
 
+  // Use refs to always get the latest values in callbacks, avoiding stale closures
+  const aiPlanRef = React.useRef(aiPlan)
+  const nutritionGoalsRef = React.useRef(nutritionGoals)
+  React.useEffect(() => { aiPlanRef.current = aiPlan }, [aiPlan])
+  React.useEffect(() => { nutritionGoalsRef.current = nutritionGoals }, [nutritionGoals])
+
   const saveProfileData = useCallback(async (planToSave?: string, goalsToSave?: NutritionGoals) => {
     if (!user) return
     
@@ -89,12 +96,12 @@ export function ProfileForm() {
       height: Number.parseFloat(formData.height) || 0,
       goal: formData.goal,
       lifestyle: formData.lifestyle,
-      aiPlan: planToSave ?? aiPlan ?? undefined,
-      nutritionGoals: goalsToSave ?? nutritionGoals ?? undefined,
+      aiPlan: planToSave ?? aiPlanRef.current ?? undefined,
+      nutritionGoals: goalsToSave ?? nutritionGoalsRef.current ?? undefined,
       updatedAt: new Date().toISOString(),
     }
     await saveProfile(profile)
-  }, [user, formData, aiPlan, nutritionGoals])
+  }, [user, formData])
 
   const handleSaveProfile = async () => {
     if (!user) return
@@ -104,14 +111,18 @@ export function ProfileForm() {
       await saveProfileData()
       
       // Save weight entry if weight changed
-      const existingProfile = await getProfileByUserId(user.id)
-      if (!existingProfile || existingProfile.weight !== Number.parseFloat(formData.weight)) {
-        await saveWeightEntry({
-          id: crypto.randomUUID(),
-          userId: user.id,
-          weight: Number.parseFloat(formData.weight),
-          date: new Date().toISOString().split('T')[0],
-        })
+      try {
+        const existingProfile = await getProfileByUserId(user.id)
+        if (!existingProfile || existingProfile.weight !== Number.parseFloat(formData.weight)) {
+          await saveWeightEntry({
+            id: crypto.randomUUID(),
+            userId: user.id,
+            weight: Number.parseFloat(formData.weight),
+            date: new Date().toISOString().split('T')[0],
+          })
+        }
+      } catch {
+        // Non-critical
       }
       
       setSaveSuccess(true)
@@ -155,13 +166,39 @@ export function ProfileForm() {
     setIsEditingGoals(false)
   }
 
+  const handleRetry = () => {
+    // Create a synthetic event for the form submit
+    const form = document.querySelector('form')
+    if (form) form.requestSubmit()
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!user) return
 
     setIsLoading(true)
+    setGenerateError(null)
 
     try {
+      // Step 1: Save the profile data first (without AI plan) so it's never lost
+      await saveProfileData()
+
+      // Step 2: Save weight entry
+      try {
+        const existingProfile = await getProfileByUserId(user.id)
+        if (!existingProfile || existingProfile.weight !== Number.parseFloat(formData.weight)) {
+          await saveWeightEntry({
+            id: crypto.randomUUID(),
+            userId: user.id,
+            weight: Number.parseFloat(formData.weight),
+            date: new Date().toISOString().split('T')[0],
+          })
+        }
+      } catch {
+        // Non-critical: don't block plan generation if weight save fails
+      }
+
+      // Step 3: Call AI to generate plan
       const response = await fetch('/api/ai/generate-plan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -178,40 +215,28 @@ export function ProfileForm() {
       const data = await response.json()
       
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to generate plan')
+        throw new Error(data.details || data.error || 'Ошибка генерации плана')
+      }
+
+      if (!data.plan) {
+        throw new Error('ИИ вернул пустой ответ. Попробуйте ещё раз.')
       }
 
       const plan = data.plan
       const goals = data.nutritionGoals as NutritionGoals
 
-      const profile: UserProfile = {
-        userId: user.id,
-        age: Number.parseInt(formData.age),
-        gender: formData.gender,
-        weight: Number.parseFloat(formData.weight),
-        height: Number.parseFloat(formData.height),
-        goal: formData.goal,
-        lifestyle: formData.lifestyle,
-        aiPlan: plan,
-        nutritionGoals: goals,
-        updatedAt: new Date().toISOString(),
-      }
-
-      await saveProfile(profile)
+      // Step 4: Update local state immediately
+      setAiPlan(plan)
       setNutritionGoals(goals)
 
-      // Save initial weight entry for chart visualization
-      await saveWeightEntry({
-        id: crypto.randomUUID(),
-        userId: user.id,
-        weight: Number.parseFloat(formData.weight),
-        date: new Date().toISOString().split('T')[0],
-      })
+      // Step 5: Persist the plan and goals to the profile
+      await saveProfileData(plan, goals)
 
-      setAiPlan(plan)
     } catch (error) {
-      console.error('Error generating plan:', error)
-      setAiPlan('Не удалось сгенерировать план. Пожалуйста, попробуйте позже.')
+      console.error('[v0] Error generating plan:', error)
+      const message = error instanceof Error ? error.message : 'Неизвестная ошибка'
+      setGenerateError(message)
+      // Do NOT overwrite aiPlan with the error -- keep the old plan visible
     } finally {
       setIsLoading(false)
     }
@@ -236,7 +261,7 @@ export function ProfileForm() {
                   type="number"
                   placeholder="25"
                   value={formData.age}
-                  onChange={(e) => setFormData({ ...formData, age: e.target.value })}
+                  onChange={(e) => { setFormData({ ...formData, age: e.target.value }); setGenerateError(null) }}
                   required
                   min="10"
                   max="120"
@@ -319,7 +344,7 @@ export function ProfileForm() {
                 id="goal"
                 placeholder="Например: похудеть на 10 кг, набрать мышечную массу..."
                 value={formData.goal}
-                onChange={(e) => setFormData({ ...formData, goal: e.target.value })}
+                onChange={(e) => { setFormData({ ...formData, goal: e.target.value }); setGenerateError(null) }}
                 required
                 rows={3}
               />
@@ -358,6 +383,36 @@ export function ProfileForm() {
           </form>
         </CardContent>
       </Card>
+
+      {generateError && (
+        <Card className="border-destructive/50 bg-destructive/5 animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <CardContent className="py-4">
+            <div className="flex items-start gap-3">
+              <div className="rounded-full bg-destructive/10 p-2 shrink-0">
+                <X className="h-4 w-4 text-destructive" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-destructive text-sm">Ошибка генерации плана</p>
+                <p className="text-sm text-muted-foreground mt-1">{generateError}</p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="shrink-0 bg-transparent"
+                onClick={handleRetry}
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                ) : (
+                  <Sparkles className="h-4 w-4 mr-1" />
+                )}
+                Повторить
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {nutritionGoals && (
         <Card className="animate-in fade-in slide-in-from-bottom-4 duration-500">

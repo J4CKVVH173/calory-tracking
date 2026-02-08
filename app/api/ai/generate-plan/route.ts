@@ -37,8 +37,12 @@ function calculateNutritionGoals(
   // Adjust based on goal
   const goalLower = goal.toLowerCase()
   let targetCalories = tdee
-  
-  if (goalLower.includes('похуд') || goalLower.includes('сброс') || goalLower.includes('сушк')) {
+
+  if
+    (goalLower.includes('похуд')
+    || goalLower.includes('сброс')
+    || goalLower.includes('сушиться')
+    || goalLower.includes('сушк')) {
     targetCalories = tdee * 0.8 // 20% deficit
   } else if (goalLower.includes('набор') || goalLower.includes('масс') || goalLower.includes('рост')) {
     targetCalories = tdee * 1.15 // 15% surplus
@@ -107,8 +111,23 @@ export async function POST(request: Request) {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error)
     console.error('[v0] Error generating plan:', errorMessage, error)
+
+    // Provide user-friendly error messages
+    let userMessage = 'Неизвестная ошибка при генерации плана'
+    if (errorMessage.includes('timeout') || errorMessage.includes('ETIMEDOUT')) {
+      userMessage = 'Превышено время ожидания ответа от ИИ. Попробуйте ещё раз.'
+    } else if (errorMessage.includes('rate') || errorMessage.includes('429')) {
+      userMessage = 'Слишком много запросов. Подождите минуту и попробуйте снова.'
+    } else if (errorMessage.includes('API key') || errorMessage.includes('auth') || errorMessage.includes('401')) {
+      userMessage = 'Ошибка авторизации API. Проверьте настройки.'
+    } else if (errorMessage.includes('500') || errorMessage.includes('502') || errorMessage.includes('503')) {
+      userMessage = 'Сервер ИИ временно недоступен. Попробуйте позже.'
+    } else {
+      userMessage = `Ошибка генерации: ${errorMessage}`
+    }
+
     return Response.json(
-      { error: 'Ошибка генерации плана', details: errorMessage },
+      { error: 'Ошибка генерации плана', details: userMessage },
       { status: 500 }
     )
   }
