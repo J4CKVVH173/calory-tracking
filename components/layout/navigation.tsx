@@ -32,7 +32,7 @@ export function Navigation() {
   return (
     <nav className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container mx-auto px-4">
-        <div className="flex h-14 items-center justify-between">
+        <div className="flex h-16 sm:h-14 items-center justify-between">
           <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
             <span className="text-primary text-xl">КалориТрек</span>
           </Link>
@@ -72,16 +72,16 @@ export function Navigation() {
           <Button
             variant="ghost"
             size="icon"
-            className="md:hidden"
+            className="md:hidden h-11 w-11"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           >
-            {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            {mobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
           </Button>
         </div>
 
         {/* Mobile Navigation */}
         {mobileMenuOpen && (
-          <div className="md:hidden py-4 space-y-2 animate-in slide-in-from-top-2 duration-200">
+          <div className="md:hidden py-3 space-y-1 animate-in slide-in-from-top-2 duration-200">
             {navItems.map((item) => {
               const Icon = item.icon
               return (
@@ -92,22 +92,24 @@ export function Navigation() {
                 >
                   <Button
                     variant={pathname === item.href ? 'secondary' : 'ghost'}
-                    className="w-full justify-start gap-2"
+                    className="w-full justify-start gap-3 h-12 text-base"
                   >
-                    <Icon className="h-4 w-4" />
+                    <Icon className="h-5 w-5" />
                     {item.label}
                   </Button>
                 </Link>
               )
             })}
-            <Button
-              variant="ghost"
-              onClick={handleLogout}
-              className="w-full justify-start gap-2 text-muted-foreground hover:text-destructive"
-            >
-              <LogOut className="h-4 w-4" />
-              Выход
-            </Button>
+            <div className="pt-2 border-t mt-2">
+              <Button
+                variant="ghost"
+                onClick={handleLogout}
+                className="w-full justify-start gap-3 h-12 text-base text-muted-foreground hover:text-destructive"
+              >
+                <LogOut className="h-5 w-5" />
+                Выход
+              </Button>
+            </div>
           </div>
         )}
       </div>

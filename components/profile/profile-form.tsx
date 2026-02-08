@@ -353,28 +353,28 @@ export function ProfileForm() {
               <Button 
                 type="button" 
                 variant="outline" 
-                className="flex-1 bg-transparent"
+                className="flex-1 bg-transparent h-12 sm:h-10 text-base sm:text-sm"
                 onClick={handleSaveProfile}
                 disabled={isSaving || isLoading}
               >
                 {isSaving ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="mr-2 h-5 w-5 sm:h-4 sm:w-4 animate-spin" />
                 ) : saveSuccess ? (
-                  <Check className="mr-2 h-4 w-4 text-primary" />
+                  <Check className="mr-2 h-5 w-5 sm:h-4 sm:w-4 text-primary" />
                 ) : (
-                  <Save className="mr-2 h-4 w-4" />
+                  <Save className="mr-2 h-5 w-5 sm:h-4 sm:w-4" />
                 )}
                 {saveSuccess ? 'Сохранено!' : 'Сохранить профиль'}
               </Button>
-              <Button type="submit" className="flex-1" disabled={isLoading || isSaving}>
+              <Button type="submit" className="flex-1 h-12 sm:h-10 text-base sm:text-sm" disabled={isLoading || isSaving}>
                 {isLoading ? (
                   <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <Loader2 className="mr-2 h-5 w-5 sm:h-4 sm:w-4 animate-spin" />
                     Генерация...
                   </>
                 ) : (
                   <>
-                    <Sparkles className="mr-2 h-4 w-4" />
+                    <Sparkles className="mr-2 h-5 w-5 sm:h-4 sm:w-4" />
                     {aiPlan ? 'Перегенерировать план' : 'Получить план от AI'}
                   </>
                 )}

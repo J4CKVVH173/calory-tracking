@@ -208,7 +208,7 @@ export function FoodLogList({ logs, onDelete }: FoodLogListProps) {
           >
             <Card className={isToday ? 'border-primary/30' : ''}>
               <CollapsibleTrigger asChild>
-                <button className="w-full px-3 py-3 sm:p-4 flex items-center justify-between hover:bg-muted/50 transition-colors rounded-t-lg">
+                <button className="w-full px-3 py-4 sm:p-4 flex items-center justify-between hover:bg-muted/50 transition-colors rounded-t-lg">
                   <div className="flex items-center gap-3">
                     {isExpanded ? (
                       <ChevronDown className="h-5 w-5 text-muted-foreground" />
@@ -251,9 +251,9 @@ export function FoodLogList({ logs, onDelete }: FoodLogListProps) {
                           variant="ghost"
                           size="icon"
                           onClick={() => handleDelete(log.id)}
-                          className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                          className="h-8 w-8 sm:h-6 sm:w-6 text-muted-foreground hover:text-destructive"
                         >
-                          <Trash2 className="h-3 w-3" />
+                          <Trash2 className="h-4 w-4 sm:h-3 sm:w-3" />
                         </Button>
                       </div>
                       
@@ -379,10 +379,10 @@ export function FoodLogList({ logs, onDelete }: FoodLogListProps) {
                                 <Button
                                   variant="ghost"
                                   size="icon"
-                                  className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                  className="h-7 w-7 sm:h-5 sm:w-5 opacity-60 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shrink-0"
                                   onClick={() => startEditing(log.id, index, item)}
                                 >
-                                  <Pencil className="h-3 w-3" />
+                                  <Pencil className="h-3.5 w-3.5 sm:h-3 sm:w-3" />
                                 </Button>
                               </div>
                               <div className="text-right">

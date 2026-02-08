@@ -115,6 +115,7 @@ export function LoginForm() {
               onChange={(e) => setUsername(e.target.value)}
               required
               disabled={isLoading}
+              className="h-11 sm:h-10 text-base sm:text-sm"
             />
           </div>
           <div className="space-y-2">
@@ -127,6 +128,7 @@ export function LoginForm() {
               onChange={(e) => setPassword(e.target.value)}
               required
               disabled={isLoading}
+              className="h-11 sm:h-10 text-base sm:text-sm"
             />
           </div>
           {isRegister && (
@@ -140,6 +142,7 @@ export function LoginForm() {
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
                 disabled={isLoading}
+                className="h-11 sm:h-10 text-base sm:text-sm"
               />
             </div>
           )}
@@ -148,7 +151,7 @@ export function LoginForm() {
               {error}
             </p>
           )}
-          <Button type="submit" className="w-full" disabled={isLoading}>
+          <Button type="submit" className="w-full h-12 sm:h-10 text-base sm:text-sm" disabled={isLoading}>
             {isLoading ? 'Загрузка...' : isRegister ? 'Зарегистрироваться' : 'Войти'}
           </Button>
         </form>
@@ -159,7 +162,7 @@ export function LoginForm() {
               setIsRegister(!isRegister)
               setError('')
             }}
-            className="text-sm text-muted-foreground hover:text-primary transition-colors underline-offset-4 hover:underline"
+            className="text-sm sm:text-sm text-muted-foreground hover:text-primary transition-colors underline-offset-4 hover:underline py-2"
           >
             {isRegister ? 'Уже есть аккаунт? Войти' : 'Нет аккаунта? Зарегистрироваться'}
           </button>

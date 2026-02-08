@@ -62,9 +62,9 @@ export function AddWeight({ onWeightAdded }: AddWeightProps) {
       <Button
         variant="outline"
         onClick={() => setIsOpen(true)}
-        className="w-full sm:w-auto"
+        className="w-full sm:w-auto h-11 sm:h-10 text-base sm:text-sm"
       >
-        <Scale className="mr-2 h-4 w-4" />
+        <Scale className="mr-2 h-5 w-5 sm:h-4 sm:w-4" />
         Добавить вес
       </Button>
     )
@@ -90,15 +90,16 @@ export function AddWeight({ onWeightAdded }: AddWeightProps) {
             required
             min="20"
             max="300"
-            className="flex-1"
+            className="flex-1 h-11 sm:h-10 text-base sm:text-sm"
           />
-          <Button type="submit" size="icon">
-            <Plus className="h-4 w-4" />
+          <Button type="submit" size="icon" className="h-11 w-11 sm:h-10 sm:w-10">
+            <Plus className="h-5 w-5 sm:h-4 sm:w-4" />
           </Button>
           <Button
             type="button"
             variant="ghost"
             onClick={() => setIsOpen(false)}
+            className="h-11 sm:h-10 text-base sm:text-sm"
           >
             Отмена
           </Button>

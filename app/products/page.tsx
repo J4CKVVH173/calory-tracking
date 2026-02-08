@@ -306,26 +306,25 @@ export default function ProductsPage() {
         <div className="flex gap-2">
           <Button
             variant="outline"
-            size="sm"
             onClick={() => {
               setShowScanner(true)
               setShowAddForm(false)
             }}
-            className="bg-transparent"
+            className="bg-transparent h-11 sm:h-9 px-3 sm:px-4"
           >
-            <ScanBarcode className="h-4 w-4 sm:mr-1.5" />
+            <ScanBarcode className="h-5 w-5 sm:h-4 sm:w-4 sm:mr-1.5" />
             <span className="hidden sm:inline">Сканировать</span>
           </Button>
           <Button
-            size="sm"
             onClick={() => {
               setShowAddForm(!showAddForm)
               setShowScanner(false)
               setScannedBarcode(null)
               setLookupNotFound(false)
             }}
+            className="h-11 sm:h-9 px-3 sm:px-4"
           >
-            <Plus className="h-4 w-4 sm:mr-1.5" />
+            <Plus className="h-5 w-5 sm:h-4 sm:w-4 sm:mr-1.5" />
             <span className="hidden sm:inline">Добавить</span>
           </Button>
         </div>

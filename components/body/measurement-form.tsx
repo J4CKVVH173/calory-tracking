@@ -288,23 +288,23 @@ export function MeasurementForm({ onMeasurementSaved }: MeasurementFormProps) {
           <Button
             type="button"
             variant="outline"
-            className="flex-1 bg-transparent"
+            className="flex-1 bg-transparent h-12 sm:h-10 text-base sm:text-sm"
             onClick={handleCalculate}
             disabled={!isFormValid}
           >
-            <Calculator className="mr-2 h-4 w-4" />
+            <Calculator className="mr-2 h-5 w-5 sm:h-4 sm:w-4" />
             Рассчитать
           </Button>
           <Button
             type="button"
-            className="flex-1"
+            className="flex-1 h-12 sm:h-10 text-base sm:text-sm"
             onClick={handleSave}
             disabled={calculatedFat === null || isLoading}
           >
             {isLoading ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              <Loader2 className="mr-2 h-5 w-5 sm:h-4 sm:w-4 animate-spin" />
             ) : (
-              <Save className="mr-2 h-4 w-4" />
+              <Save className="mr-2 h-5 w-5 sm:h-4 sm:w-4" />
             )}
             Сохранить измерение
           </Button>

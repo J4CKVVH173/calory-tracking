@@ -337,7 +337,7 @@ export function FoodInput({ onFoodAdded }: FoodInputProps) {
                 <button
                   key={food.id}
                   onClick={() => handleSelectSuggestion(food)}
-                  className="w-full px-3 py-2 text-left hover:bg-muted flex items-center justify-between transition-colors"
+                  className="w-full px-3 py-3 sm:py-2 text-left hover:bg-muted flex items-center justify-between transition-colors"
                 >
                   <div>
                     <div className="font-medium">{food.name}</div>
@@ -359,7 +359,7 @@ export function FoodInput({ onFoodAdded }: FoodInputProps) {
           <Button 
             onClick={handleParse} 
             disabled={isLoading || !input.trim()} 
-            className="flex-1"
+            className="flex-1 h-11 sm:h-10 text-base sm:text-sm"
           >
             {isLoading ? (
               <>
@@ -387,7 +387,7 @@ export function FoodInput({ onFoodAdded }: FoodInputProps) {
                 <button
                   key={food.id}
                   onClick={() => handleSelectSuggestion(food)}
-                  className="px-3 py-1.5 text-sm bg-muted hover:bg-muted/80 rounded-full transition-colors flex items-center gap-1"
+                  className="px-4 py-2.5 sm:px-3 sm:py-1.5 text-sm bg-muted hover:bg-muted/80 rounded-full transition-colors flex items-center gap-1"
                 >
                   {food.name}
                   <span className="text-xs text-muted-foreground">({food.calories})</span>
@@ -616,14 +616,14 @@ export function FoodInput({ onFoodAdded }: FoodInputProps) {
             </div>
 
             <div className="flex gap-2">
-              <Button onClick={handleSave} className="flex-1">
-                <Bookmark className="mr-2 h-4 w-4" />
+              <Button onClick={handleSave} className="flex-1 h-11 sm:h-10 text-base sm:text-sm">
+                <Bookmark className="mr-2 h-5 w-5 sm:h-4 sm:w-4" />
                 Сохранить
               </Button>
               <Button 
                 variant="outline" 
                 onClick={() => setParsedItems(null)}
-                className="bg-transparent"
+                className="bg-transparent h-11 sm:h-10 text-base sm:text-sm"
               >
                 Отмена
               </Button>
