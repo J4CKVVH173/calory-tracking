@@ -121,6 +121,11 @@
   }
   body {
     @apply bg-background text-foreground;
+    /* PWA safe areas for notched devices */
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
   }
 
   /* Hide number input spinners across all browsers */

@@ -1,18 +1,37 @@
 import React from "react"
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 import { AuthProvider } from '@/lib/auth-context'
 import { Navigation } from '@/components/layout/navigation'
+import { PWAProvider } from '@/components/pwa/pwa-provider'
 import './globals.css'
 
 const _geist = Geist({ subsets: ["latin"] });
 const _geistMono = Geist_Mono({ subsets: ["latin"] });
 
+export const viewport: Viewport = {
+  themeColor: '#3b82f6',
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: 'cover',
+}
+
 export const metadata: Metadata = {
   title: 'КалориТрек - Отслеживание калорий',
   description: 'Приложение для отслеживания калорий с AI-помощником',
   generator: 'v0.app',
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'КалориТрек',
+  },
+  formatDetection: {
+    telephone: false,
+  },
   icons: {
     icon: [
       {
@@ -28,7 +47,7 @@ export const metadata: Metadata = {
         type: 'image/svg+xml',
       },
     ],
-    apple: '/apple-icon.png',
+    apple: '/icons/icon-192x192.jpg',
   },
 }
 
@@ -43,6 +62,7 @@ export default function RootLayout({
         <AuthProvider>
           <Navigation />
           <main>{children}</main>
+          <PWAProvider />
         </AuthProvider>
         <Analytics />
       </body>
