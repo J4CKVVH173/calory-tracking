@@ -1,0 +1,8 @@
+services:
+  calory:
+    image: calory
+    container_name: calory
+    ports:
+      - "3001:3000"
+    volumes:
+      - ./store.json:/app/data/store.json
