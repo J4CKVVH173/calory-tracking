@@ -43,6 +43,8 @@ export function FoodLogList({ logs, onDelete }: FoodLogListProps) {
   const [editingItem, setEditingItem] = useState<EditingState | null>(null)
   const [editedValues, setEditedValues] = useState<FoodItem | null>(null)
   const [originalValues, setOriginalValues] = useState<FoodItem | null>(null)
+  // Per-100g base derived from original values; used for lossless weight scaling
+  const [basePer100g, setBasePer100g] = useState<{ protein: number; fat: number; carbs: number } | null>(null)
 
   const handleDelete = async (logId: string) => {
     await deleteFoodLog(logId)
@@ -65,17 +67,34 @@ export function FoodLogList({ logs, onDelete }: FoodLogListProps) {
     setEditingItem({ logId, itemIndex })
     setEditedValues({ ...item })
     setOriginalValues({ ...item })
+    // Derive per-100g base from item's current values
+    const w = item.weight || 100
+    const ratio = 100 / w
+    setBasePer100g({
+      protein: Math.round(item.protein * ratio * 10) / 10,
+      fat: Math.round(item.fat * ratio * 10) / 10,
+      carbs: Math.round(item.carbs * ratio * 10) / 10,
+    })
   }
 
   const cancelEditing = () => {
     setEditingItem(null)
     setEditedValues(null)
     setOriginalValues(null)
+    setBasePer100g(null)
   }
 
   const resetEdit = () => {
     if (originalValues) {
       setEditedValues({ ...originalValues })
+      // Restore the per-100g base from original values
+      const w = originalValues.weight || 100
+      const ratio = 100 / w
+      setBasePer100g({
+        protein: Math.round(originalValues.protein * ratio * 10) / 10,
+        fat: Math.round(originalValues.fat * ratio * 10) / 10,
+        carbs: Math.round(originalValues.carbs * ratio * 10) / 10,
+      })
     }
   }
 
@@ -85,23 +104,40 @@ export function FoodLogList({ logs, onDelete }: FoodLogListProps) {
     if (field === 'name') {
       setEditedValues({ ...editedValues, name: value as string })
     } else if (field === 'weight') {
-      // Recalculate all nutritional values proportionally when weight changes
       const newWeight = typeof value === 'string' ? parseFloat(value) || 0 : value
-      const oldWeight = editedValues.weight || 1
-      const ratio = newWeight / oldWeight
       
-      const newProtein = Math.round(editedValues.protein * ratio * 10) / 10
-      const newFat = Math.round(editedValues.fat * ratio * 10) / 10
-      const newCarbs = Math.round(editedValues.carbs * ratio * 10) / 10
-      
-      setEditedValues({
-        ...editedValues,
-        weight: Math.round(newWeight),
-        calories: Math.round(newProtein * 4 + newFat * 9 + newCarbs * 4),
-        protein: newProtein,
-        fat: newFat,
-        carbs: newCarbs,
-      })
+      if (basePer100g) {
+        // Source-based scaling: always derive from per-100g base (no precision loss)
+        const ratio = newWeight / 100
+        const newProtein = Math.round(basePer100g.protein * ratio * 10) / 10
+        const newFat = Math.round(basePer100g.fat * ratio * 10) / 10
+        const newCarbs = Math.round(basePer100g.carbs * ratio * 10) / 10
+        setEditedValues({
+          ...editedValues,
+          weight: Math.round(newWeight),
+          calories: Math.round(newProtein * 4 + newFat * 9 + newCarbs * 4),
+          protein: newProtein,
+          fat: newFat,
+          carbs: newCarbs,
+        })
+      } else {
+        // Fallback: ratio from original values
+        const orig = originalValues
+        if (orig) {
+          const ratio = newWeight / (orig.weight || 100)
+          const newProtein = Math.round(orig.protein * ratio * 10) / 10
+          const newFat = Math.round(orig.fat * ratio * 10) / 10
+          const newCarbs = Math.round(orig.carbs * ratio * 10) / 10
+          setEditedValues({
+            ...editedValues,
+            weight: Math.round(newWeight),
+            calories: Math.round(newProtein * 4 + newFat * 9 + newCarbs * 4),
+            protein: newProtein,
+            fat: newFat,
+            carbs: newCarbs,
+          })
+        }
+      }
     } else if (field === 'calories') {
       // User explicitly sets calories
       setEditedValues({
@@ -109,11 +145,21 @@ export function FoodLogList({ logs, onDelete }: FoodLogListProps) {
         calories: typeof value === 'string' ? Math.round(parseFloat(value) || 0) : Math.round(value),
       })
     } else {
-      // protein, fat, carbs — update value and recalculate calories
-      const numVal = typeof value === 'string' ? Math.round(parseFloat(value) || 0) : Math.round(value)
+      // protein, fat, carbs — update value, recalculate calories, and update base
+      const numVal = typeof value === 'string' ? Math.round((parseFloat(value) || 0) * 10) / 10 : Math.round(value * 10) / 10
       const updated = { ...editedValues, [field]: numVal }
       updated.calories = Math.round(updated.protein * 4 + updated.fat * 9 + updated.carbs * 4)
       setEditedValues(updated)
+      
+      // Update the per-100g base so future weight changes use user's corrected values
+      if (updated.weight > 0) {
+        const ratio = 100 / updated.weight
+        setBasePer100g({
+          protein: Math.round(updated.protein * ratio * 10) / 10,
+          fat: Math.round(updated.fat * ratio * 10) / 10,
+          carbs: Math.round(updated.carbs * ratio * 10) / 10,
+        })
+      }
     }
   }
 

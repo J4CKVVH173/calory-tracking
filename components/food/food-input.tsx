@@ -14,9 +14,20 @@ interface FoodInputProps {
   onFoodAdded: () => void
 }
 
+/** Per-100g base values from DB or AI, used as source of truth for weight scaling */
+interface Per100gBase {
+  calories: number
+  protein: number
+  fat: number
+  carbs: number
+}
+
 interface EditableFoodItem extends FoodItem {
   isEditing?: boolean
   quantity?: number
+  /** Base per-100g values for recalculation. When present, weight changes
+   *  always derive macros from this source instead of ratio-based scaling. */
+  sourcePer100g?: Per100gBase
 }
 
 function hasMissingMacros(item: FoodItem): boolean {
@@ -83,21 +94,35 @@ export function FoodInput({ onFoodAdded }: FoodInputProps) {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
+  /** Scale per-100g values to a given weight with 1-decimal precision */
+  const scaleFromBase = (base: Per100gBase, weight: number) => {
+    const ratio = weight / 100
+    const protein = Math.round(base.protein * ratio * 10) / 10
+    const fat = Math.round(base.fat * ratio * 10) / 10
+    const carbs = Math.round(base.carbs * ratio * 10) / 10
+    return {
+      protein,
+      fat,
+      carbs,
+      calories: calcCaloriesFromMacros(protein, fat, carbs),
+    }
+  }
+
   const handleSelectSuggestion = (food: SavedFood) => {
-    // DB stores macros per 100g. Scale to the default serving weight.
-    const ratio = food.weight / 100
-    const scaledProtein = Math.round(food.protein * ratio * 10) / 10
-    const scaledFat = Math.round(food.fat * ratio * 10) / 10
-    const scaledCarbs = Math.round(food.carbs * ratio * 10) / 10
+    // DB stores macros per 100g. Keep source for future recalculations.
+    const base: Per100gBase = {
+      calories: food.calories,
+      protein: food.protein,
+      fat: food.fat,
+      carbs: food.carbs,
+    }
+    const scaled = scaleFromBase(base, food.weight)
     const newItem: EditableFoodItem = {
       name: food.name,
       weight: food.weight,
-      // Derive calories from scaled macros for consistency
-      calories: Math.round(scaledProtein * 4 + scaledFat * 9 + scaledCarbs * 4),
-      protein: scaledProtein,
-      fat: scaledFat,
-      carbs: scaledCarbs,
+      ...scaled,
       quantity: 1,
+      sourcePer100g: base,
     }
     setParsedItems(prev => prev ? [...prev, newItem] : [newItem])
     setInput('')
@@ -138,11 +163,26 @@ export function FoodInput({ onFoodAdded }: FoodInputProps) {
       }
 
       if (data.items && data.items.length > 0) {
-        const newItems = data.items.map((item: FoodItem & { quantity?: number }) => ({
-          ...item,
-          quantity: item.quantity || 1,
-          isEditing: false,
-        }))
+        const newItems = data.items.map((item: FoodItem & { quantity?: number }) => {
+          // Derive per-100g base from the AI-returned absolute values
+          const w = item.weight || 100
+          const ratio = 100 / w
+          return {
+            ...item,
+            quantity: item.quantity || 1,
+            isEditing: false,
+            sourcePer100g: {
+              protein: Math.round(item.protein * ratio * 10) / 10,
+              fat: Math.round(item.fat * ratio * 10) / 10,
+              carbs: Math.round(item.carbs * ratio * 10) / 10,
+              calories: calcCaloriesFromMacros(
+                Math.round(item.protein * ratio * 10) / 10,
+                Math.round(item.fat * ratio * 10) / 10,
+                Math.round(item.carbs * ratio * 10) / 10,
+              ),
+            } as Per100gBase,
+          }
+        })
         setParsedItems(prev => prev ? [...prev, ...newItems] : newItems)
         setInput('')
       } else {
@@ -193,25 +233,51 @@ export function FoodInput({ onFoodAdded }: FoodInputProps) {
     if (field === 'name') {
       item.name = value as string
     } else if (field === 'weight') {
-      // Recalculate all nutritional values proportionally when weight changes
       const newWeight = typeof value === 'string' ? parseFloat(value) || 0 : value
-      const oldWeight = item.weight || 1
-      const ratio = newWeight / oldWeight
-      
       item.weight = Math.round(newWeight)
-      item.protein = Math.round(item.protein * ratio * 10) / 10
-      item.fat = Math.round(item.fat * ratio * 10) / 10
-      item.carbs = Math.round(item.carbs * ratio * 10) / 10
-      // Derive calories from scaled macros for consistency
-      item.calories = calcCaloriesFromMacros(item.protein, item.fat, item.carbs)
+      
+      if (item.sourcePer100g) {
+        // Source-based recalculation: always derive from per-100g base (no precision loss)
+        const scaled = scaleFromBase(item.sourcePer100g, newWeight)
+        item.protein = scaled.protein
+        item.fat = scaled.fat
+        item.carbs = scaled.carbs
+        item.calories = scaled.calories
+      } else {
+        // Fallback: ratio-based scaling when no source data (e.g. AI-parsed items)
+        const oldWeight = originalItems.get(index)?.weight || item.weight || 1
+        const orig = originalItems.get(index)
+        if (orig) {
+          const ratio = newWeight / orig.weight
+          item.protein = Math.round(orig.protein * ratio * 10) / 10
+          item.fat = Math.round(orig.fat * ratio * 10) / 10
+          item.carbs = Math.round(orig.carbs * ratio * 10) / 10
+          item.calories = calcCaloriesFromMacros(item.protein, item.fat, item.carbs)
+        }
+      }
     } else if (field === 'calories') {
       // User explicitly sets calories — just update
       item.calories = typeof value === 'string' ? Math.round(parseFloat(value) || 0) : Math.round(value)
     } else {
-      // protein, fat, carbs — update value and recalculate calories
-      const numVal = typeof value === 'string' ? Math.round(parseFloat(value) || 0) : Math.round(value)
-      item[field] = numVal
+      // protein, fat, carbs — update value, recalculate calories, and update source base
+      const numVal = typeof value === 'string' ? (parseFloat(value) || 0) : value
+      item[field] = Math.round(numVal * 10) / 10
       item.calories = calcCaloriesFromMacros(item.protein, item.fat, item.carbs)
+      
+      // Update the per-100g source so future weight changes use user's corrected values
+      if (item.sourcePer100g && item.weight > 0) {
+        const ratio = 100 / item.weight
+        item.sourcePer100g = {
+          protein: Math.round(item.protein * ratio * 10) / 10,
+          fat: Math.round(item.fat * ratio * 10) / 10,
+          carbs: Math.round(item.carbs * ratio * 10) / 10,
+          calories: calcCaloriesFromMacros(
+            Math.round(item.protein * ratio * 10) / 10,
+            Math.round(item.fat * ratio * 10) / 10,
+            Math.round(item.carbs * ratio * 10) / 10,
+          ),
+        }
+      }
     }
     
     setParsedItems(updated)
@@ -230,22 +296,29 @@ export function FoodInput({ onFoodAdded }: FoodInputProps) {
     setParsedItems(updated.length > 0 ? updated : null)
   }
 
-  const handleSaveToDatabase = async (item: FoodItem) => {
+  const handleSaveToDatabase = async (item: EditableFoodItem) => {
     if (!user) return
     
-    // Normalize macros to per-100g for DB storage
-    const weight = item.weight || 100
-    const ratio = 100 / weight
-    const per100Protein = Math.round(item.protein * ratio * 10) / 10
-    const per100Fat = Math.round(item.fat * ratio * 10) / 10
-    const per100Carbs = Math.round(item.carbs * ratio * 10) / 10
-    const per100 = {
-      // Derive calories from per-100g macros for consistency
-      calories: calcCaloriesFromMacros(per100Protein, per100Fat, per100Carbs),
-      protein: per100Protein,
-      fat: per100Fat,
-      carbs: per100Carbs,
+    // Get per-100g values: prefer sourcePer100g if available (already tracked),
+    // otherwise normalize from absolute values
+    let per100: Per100gBase
+    if (item.sourcePer100g) {
+      per100 = { ...item.sourcePer100g }
+    } else {
+      const weight = item.weight || 100
+      const ratio = 100 / weight
+      const protein = Math.round(item.protein * ratio * 10) / 10
+      const fat = Math.round(item.fat * ratio * 10) / 10
+      const carbs = Math.round(item.carbs * ratio * 10) / 10
+      per100 = {
+        calories: calcCaloriesFromMacros(protein, fat, carbs),
+        protein,
+        fat,
+        carbs,
+      }
     }
+
+    const weight = item.weight || 100
 
     // Check if already exists
     const existing = savedFoods.find(f => 
@@ -253,11 +326,24 @@ export function FoodInput({ onFoodAdded }: FoodInputProps) {
     )
     
     if (existing) {
-      // Update existing — bump count, keep existing per-100g values
+      // Check if per-100g values have changed (user edited macros)
+      const macrosChanged =
+        Math.abs(existing.protein - per100.protein) > 0.2 ||
+        Math.abs(existing.fat - per100.fat) > 0.2 ||
+        Math.abs(existing.carbs - per100.carbs) > 0.2
+
       const updated: SavedFood = {
         ...existing,
         useCount: existing.useCount + 1,
         lastUsed: new Date().toISOString(),
+        // Update macros and serving weight if user edited them
+        ...(macrosChanged && {
+          weight,
+          calories: per100.calories,
+          protein: per100.protein,
+          fat: per100.fat,
+          carbs: per100.carbs,
+        }),
       }
       await saveSavedFood(updated)
       setSavedFoods(prev => prev.map(f => f.id === existing.id ? updated : f))
@@ -267,7 +353,7 @@ export function FoodInput({ onFoodAdded }: FoodInputProps) {
         id: crypto.randomUUID(),
         userId: user.id,
         name: item.name,
-        weight: weight,
+        weight,
         calories: per100.calories,
         protein: per100.protein,
         fat: per100.fat,
