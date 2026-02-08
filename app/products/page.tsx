@@ -426,9 +426,9 @@ export default function ProductsPage() {
                     />
                   </div>
                 </div>
-                <div className="grid grid-cols-5 gap-2">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                   <div>
-                    <div className="text-[10px] text-muted-foreground mb-0.5">Вес, г</div>
+                    <div className="text-[10px] text-muted-foreground mb-0.5">Порция, г</div>
                     <Input
                       type="number"
                       placeholder="100"
@@ -439,6 +439,9 @@ export default function ProductsPage() {
                       className="text-sm"
                     />
                   </div>
+                </div>
+                <div className="text-xs font-medium text-muted-foreground pt-1">Показатели на 100 г:</div>
+                <div className="grid grid-cols-4 gap-2">
                   <div>
                     <div className="text-[10px] text-muted-foreground mb-0.5">
                       Ккал {autoCalcNew && <span className="text-primary">*</span>}
@@ -487,7 +490,7 @@ export default function ProductsPage() {
                 </div>
                 {autoCalcNew && (
                   <p className="text-[11px] text-muted-foreground">
-                    <span className="text-primary">*</span> Калории рассчитываются автоматически по формуле: Б x 4 + Ж x 9 + У x 4
+                    <span className="text-primary">*</span> Калории рассчитываются автоматически: Б x 4 + Ж x 9 + У x 4
                   </p>
                 )}
                 <div className="flex gap-2">
@@ -579,9 +582,9 @@ export default function ProductsPage() {
                   <th className="text-left p-3">
                     <SortButton field="name" label="Продукт" />
                   </th>
-                  <th className="text-right p-3 w-16">Вес</th>
-                  <th className="text-right p-3 w-16">
-                    <SortButton field="calories" label="Ккал" />
+                  <th className="text-right p-3 w-16">Порция</th>
+                  <th className="text-right p-3 w-20">
+                    <SortButton field="calories" label="Ккал/100г" />
                   </th>
                   <th className="text-right p-3 hidden sm:table-cell">
                     <SortButton field="protein" label="Б/Ж/У" />
@@ -641,10 +644,10 @@ export default function ProductsPage() {
                                 <X className="h-4 w-4 text-destructive" />
                               </Button>
                             </div>
-                            <div className="grid grid-cols-5 gap-2">
+                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                               <div>
                                 <div className="text-[10px] text-muted-foreground mb-0.5">
-                                  Вес, г
+                                  Порция, г
                                 </div>
                                 <Input
                                   type="number"
@@ -660,6 +663,9 @@ export default function ProductsPage() {
                                   className="h-8 text-sm text-right"
                                 />
                               </div>
+                            </div>
+                            <div className="text-[10px] font-medium text-muted-foreground">На 100 г:</div>
+                            <div className="grid grid-cols-4 gap-2">
                               <div>
                                 <div className="text-[10px] text-muted-foreground mb-0.5">
                                   Ккал {autoCalcEdit && <span className="text-primary">*</span>}

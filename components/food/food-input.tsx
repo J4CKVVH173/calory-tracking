@@ -26,7 +26,14 @@ function hasMissingMacros(item: FoodItem): boolean {
 function hasCalorieMismatch(item: FoodItem): boolean {
   if (item.protein === 0 && item.fat === 0 && item.carbs === 0) return false
   const calculated = Math.round(item.protein * 4 + item.fat * 9 + item.carbs * 4)
-  return Math.abs(item.calories - calculated) > 5
+  // Scale tolerance with portion size: at least 5 kcal, or ~3% of calculated
+  const tolerance = Math.max(5, Math.round(calculated * 0.03))
+  return Math.abs(item.calories - calculated) > tolerance
+}
+
+/** Calculate calories from macros */
+function calcCaloriesFromMacros(protein: number, fat: number, carbs: number): number {
+  return Math.round(protein * 4 + fat * 9 + carbs * 4)
 }
 
 export function FoodInput({ onFoodAdded }: FoodInputProps) {
@@ -77,14 +84,19 @@ export function FoodInput({ onFoodAdded }: FoodInputProps) {
   }, [])
 
   const handleSelectSuggestion = (food: SavedFood) => {
-    // Add to parsed items directly
+    // DB stores macros per 100g. Scale to the default serving weight.
+    const ratio = food.weight / 100
+    const scaledProtein = Math.round(food.protein * ratio * 10) / 10
+    const scaledFat = Math.round(food.fat * ratio * 10) / 10
+    const scaledCarbs = Math.round(food.carbs * ratio * 10) / 10
     const newItem: EditableFoodItem = {
       name: food.name,
       weight: food.weight,
-      calories: food.calories,
-      protein: food.protein,
-      fat: food.fat,
-      carbs: food.carbs,
+      // Derive calories from scaled macros for consistency
+      calories: Math.round(scaledProtein * 4 + scaledFat * 9 + scaledCarbs * 4),
+      protein: scaledProtein,
+      fat: scaledFat,
+      carbs: scaledCarbs,
       quantity: 1,
     }
     setParsedItems(prev => prev ? [...prev, newItem] : [newItem])
@@ -187,13 +199,19 @@ export function FoodInput({ onFoodAdded }: FoodInputProps) {
       const ratio = newWeight / oldWeight
       
       item.weight = Math.round(newWeight)
-      item.calories = Math.round(item.calories * ratio)
-      item.protein = Math.round(item.protein * ratio)
-      item.fat = Math.round(item.fat * ratio)
-      item.carbs = Math.round(item.carbs * ratio)
+      item.protein = Math.round(item.protein * ratio * 10) / 10
+      item.fat = Math.round(item.fat * ratio * 10) / 10
+      item.carbs = Math.round(item.carbs * ratio * 10) / 10
+      // Derive calories from scaled macros for consistency
+      item.calories = calcCaloriesFromMacros(item.protein, item.fat, item.carbs)
+    } else if (field === 'calories') {
+      // User explicitly sets calories — just update
+      item.calories = typeof value === 'string' ? Math.round(parseFloat(value) || 0) : Math.round(value)
     } else {
-      // For protein, fat, carbs, calories - just update the value directly
-      item[field] = typeof value === 'string' ? Math.round(parseFloat(value) || 0) : Math.round(value)
+      // protein, fat, carbs — update value and recalculate calories
+      const numVal = typeof value === 'string' ? Math.round(parseFloat(value) || 0) : Math.round(value)
+      item[field] = numVal
+      item.calories = calcCaloriesFromMacros(item.protein, item.fat, item.carbs)
     }
     
     setParsedItems(updated)
@@ -215,36 +233,45 @@ export function FoodInput({ onFoodAdded }: FoodInputProps) {
   const handleSaveToDatabase = async (item: FoodItem) => {
     if (!user) return
     
+    // Normalize macros to per-100g for DB storage
+    const weight = item.weight || 100
+    const ratio = 100 / weight
+    const per100Protein = Math.round(item.protein * ratio * 10) / 10
+    const per100Fat = Math.round(item.fat * ratio * 10) / 10
+    const per100Carbs = Math.round(item.carbs * ratio * 10) / 10
+    const per100 = {
+      // Derive calories from per-100g macros for consistency
+      calories: calcCaloriesFromMacros(per100Protein, per100Fat, per100Carbs),
+      protein: per100Protein,
+      fat: per100Fat,
+      carbs: per100Carbs,
+    }
+
     // Check if already exists
     const existing = savedFoods.find(f => 
       f.name.toLowerCase() === item.name.toLowerCase() && f.userId === user.id
     )
     
     if (existing) {
-      // Update existing
+      // Update existing — bump count, keep existing per-100g values
       const updated: SavedFood = {
         ...existing,
-        weight: item.weight,
-        calories: item.calories,
-        protein: item.protein,
-        fat: item.fat,
-        carbs: item.carbs,
         useCount: existing.useCount + 1,
         lastUsed: new Date().toISOString(),
       }
       await saveSavedFood(updated)
       setSavedFoods(prev => prev.map(f => f.id === existing.id ? updated : f))
     } else {
-      // Create new
+      // Create new with per-100g values and the actual weight as default serving
       const newSavedFood: SavedFood = {
         id: crypto.randomUUID(),
         userId: user.id,
         name: item.name,
-        weight: item.weight,
-        calories: item.calories,
-        protein: item.protein,
-        fat: item.fat,
-        carbs: item.carbs,
+        weight: weight,
+        calories: per100.calories,
+        protein: per100.protein,
+        fat: per100.fat,
+        carbs: per100.carbs,
         useCount: 1,
         lastUsed: new Date().toISOString(),
         createdAt: new Date().toISOString(),
@@ -342,7 +369,7 @@ export function FoodInput({ onFoodAdded }: FoodInputProps) {
                   <div>
                     <div className="font-medium">{food.name}</div>
                     <div className="text-xs text-muted-foreground">
-                      {food.weight}г • {food.calories} ккал
+                      {food.weight}г • {Math.round(food.calories * food.weight / 100)} ккал
                     </div>
                   </div>
                   <div className="text-xs text-muted-foreground flex items-center gap-1">
@@ -390,7 +417,7 @@ export function FoodInput({ onFoodAdded }: FoodInputProps) {
                   className="px-4 py-2.5 sm:px-3 sm:py-1.5 text-sm bg-muted hover:bg-muted/80 rounded-full transition-colors flex items-center gap-1"
                 >
                   {food.name}
-                  <span className="text-xs text-muted-foreground">({food.calories})</span>
+                  <span className="text-xs text-muted-foreground">({Math.round(food.calories * food.weight / 100)})</span>
                 </button>
               ))}
             </div>
@@ -471,12 +498,14 @@ export function FoodInput({ onFoodAdded }: FoodInputProps) {
                                 />
                               </div>
                               <div>
-                                <div className="text-[10px] text-muted-foreground mb-0.5">Ккал</div>
+                                <div className="text-[10px] text-muted-foreground mb-0.5">
+                                  Ккал <span className="text-primary">*</span>
+                                </div>
                                 <Input
                                   type="number"
                                   value={item.calories}
                                   onChange={(e) => handleUpdateItem(index, 'calories', e.target.value)}
-                                  className={`h-8 text-sm text-right ${hasCalorieMismatch(item) ? 'border-amber-500 focus-visible:ring-amber-500' : ''}`}
+                                  className={`h-8 text-sm text-right bg-muted/50 ${hasCalorieMismatch(item) ? 'border-amber-500 focus-visible:ring-amber-500' : ''}`}
                                 />
                               </div>
                               <div>

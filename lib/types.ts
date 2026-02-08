@@ -84,16 +84,18 @@ export interface BodyMeasurement {
 }
 
 // Saved food item for user's personal food database
+// Macros (calories, protein, fat, carbs) are always stored PER 100g.
+// `weight` is the default serving size in grams (e.g. 120g for a yogurt).
 export interface SavedFood {
   id: string
   userId: string
   name: string
   barcode?: string // EAN/UPC barcode
-  weight: number // default serving size
-  calories: number // per serving
-  protein: number
-  fat: number
-  carbs: number
+  weight: number // default serving size in grams
+  calories: number // per 100g
+  protein: number // per 100g
+  fat: number // per 100g
+  carbs: number // per 100g
   useCount: number // track frequency for sorting suggestions
   lastUsed: string
   createdAt: string

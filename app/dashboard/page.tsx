@@ -76,53 +76,49 @@ export default function DashboardPage() {
         <AddWeight onWeightAdded={() => setRefreshKey((k) => k + 1)} />
       </div>
 
-      {/* Quick actions if missing profile or food logs */}
-      {(!hasProfile || !hasFoodLogs) && (
-        <div className="grid gap-2 sm:gap-4 sm:grid-cols-2">
-          {!hasProfile && (
-            <Card className="border-primary/20 bg-primary/5">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <User className="h-5 w-5" />
-                  Заполните профиль
-                </CardTitle>
-                <CardDescription>
-                  Получите персональный план питания от ИИ
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Link href="/profile">
-                  <Button className="w-full h-12 text-base sm:h-10 sm:text-sm">
-                    Заполнить профиль
-                    <ArrowRight className="ml-2 h-5 w-5 sm:h-4 sm:w-4" />
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
-          )}
-          {!hasFoodLogs && (
-            <Card className="border-accent/20 bg-accent/5">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg flex items-center gap-2">
-                  <Utensils className="h-5 w-5" />
-                  Добавьте первую запись
-                </CardTitle>
-                <CardDescription>
-                  Начните отслеживать ваше питание
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Link href="/food">
-                  <Button variant="secondary" className="w-full h-12 text-base sm:h-10 sm:text-sm">
-                    Добавить еду
-                    <ArrowRight className="ml-2 h-5 w-5 sm:h-4 sm:w-4" />
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      )}
+      {/* Quick action: always show Add food, optionally show profile setup */}
+      <div className="grid gap-2 sm:gap-4 sm:grid-cols-2">
+        {!hasProfile && (
+          <Card className="border-primary/20 bg-primary/5">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <User className="h-5 w-5" />
+                Заполните профиль
+              </CardTitle>
+              <CardDescription>
+                Получите персональный план питания от ИИ
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Link href="/profile">
+                <Button className="w-full h-12 text-base sm:h-10 sm:text-sm">
+                  Заполнить профиль
+                  <ArrowRight className="ml-2 h-5 w-5 sm:h-4 sm:w-4" />
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+        )}
+        <Card className="border-accent/20 bg-accent/5">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Utensils className="h-5 w-5" />
+              {hasFoodLogs ? 'Добавить приём пищи' : 'Добавьте первую запись'}
+            </CardTitle>
+            <CardDescription>
+              {hasFoodLogs ? 'Запишите что вы съели' : 'Начните отслеживать ваше питание'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link href="/food">
+              <Button variant="secondary" className="w-full h-12 text-base sm:h-10 sm:text-sm">
+                Добавить еду
+                <ArrowRight className="ml-2 h-5 w-5 sm:h-4 sm:w-4" />
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Today's stats */}
       <TodayStats logs={foodLogs} profile={profile} />

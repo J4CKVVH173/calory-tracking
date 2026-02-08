@@ -30,7 +30,9 @@ function hasMissingMacros(item: FoodItem): boolean {
 function hasCalorieMismatch(item: FoodItem): boolean {
   if (item.protein === 0 && item.fat === 0 && item.carbs === 0) return false
   const calculated = Math.round(item.protein * 4 + item.fat * 9 + item.carbs * 4)
-  return Math.abs(item.calories - calculated) > 5
+  // Scale tolerance with portion size: at least 5 kcal, or ~3% of calculated
+  const tolerance = Math.max(5, Math.round(calculated * 0.03))
+  return Math.abs(item.calories - calculated) > tolerance
 }
 
 export function FoodLogList({ logs, onDelete }: FoodLogListProps) {
@@ -88,20 +90,30 @@ export function FoodLogList({ logs, onDelete }: FoodLogListProps) {
       const oldWeight = editedValues.weight || 1
       const ratio = newWeight / oldWeight
       
+      const newProtein = Math.round(editedValues.protein * ratio * 10) / 10
+      const newFat = Math.round(editedValues.fat * ratio * 10) / 10
+      const newCarbs = Math.round(editedValues.carbs * ratio * 10) / 10
+      
       setEditedValues({
         ...editedValues,
         weight: Math.round(newWeight),
-        calories: Math.round(editedValues.calories * ratio),
-        protein: Math.round(editedValues.protein * ratio),
-        fat: Math.round(editedValues.fat * ratio),
-        carbs: Math.round(editedValues.carbs * ratio),
+        calories: Math.round(newProtein * 4 + newFat * 9 + newCarbs * 4),
+        protein: newProtein,
+        fat: newFat,
+        carbs: newCarbs,
       })
-    } else {
-      // For protein, fat, carbs, calories - just update the value directly
+    } else if (field === 'calories') {
+      // User explicitly sets calories
       setEditedValues({
         ...editedValues,
-        [field]: typeof value === 'string' ? Math.round(parseFloat(value) || 0) : Math.round(value),
+        calories: typeof value === 'string' ? Math.round(parseFloat(value) || 0) : Math.round(value),
       })
+    } else {
+      // protein, fat, carbs — update value and recalculate calories
+      const numVal = typeof value === 'string' ? Math.round(parseFloat(value) || 0) : Math.round(value)
+      const updated = { ...editedValues, [field]: numVal }
+      updated.calories = Math.round(updated.protein * 4 + updated.fat * 9 + updated.carbs * 4)
+      setEditedValues(updated)
     }
   }
 
