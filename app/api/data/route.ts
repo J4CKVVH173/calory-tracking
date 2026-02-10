@@ -1,6 +1,6 @@
 import { promises as fs } from 'fs'
 import path from 'path'
-import type { User, UserProfile, WeightEntry, FoodLog, BodyMeasurement, SavedFood } from '@/lib/types'
+import type { User, UserProfile, WeightEntry, FoodLog, BodyMeasurement, SavedFood, Product, UserFavorite } from '@/lib/types'
 
 interface DataStore {
   users: User[]
@@ -8,7 +8,9 @@ interface DataStore {
   weightEntries: WeightEntry[]
   foodLogs: FoodLog[]
   bodyMeasurements: BodyMeasurement[]
-  savedFoods: SavedFood[]
+  savedFoods: SavedFood[] // legacy, kept for backward compat
+  products: Product[]
+  userFavorites: UserFavorite[]
 }
 
 const DATA_FILE = path.join(process.cwd(), 'data', 'store.json')
@@ -40,7 +42,7 @@ async function ensureDataDir() {
 }
 
 function getEmptyStore(): DataStore {
-  return { users: [], profiles: [], weightEntries: [], foodLogs: [], bodyMeasurements: [], savedFoods: [] }
+  return { users: [], profiles: [], weightEntries: [], foodLogs: [], bodyMeasurements: [], savedFoods: [], products: [], userFavorites: [] }
 }
 
 async function readData(): Promise<DataStore> {
@@ -49,14 +51,57 @@ async function readData(): Promise<DataStore> {
     const content = await fs.readFile(DATA_FILE, 'utf-8')
     const parsed = JSON.parse(content)
     // Ensure all arrays exist
-    return {
+    const store: DataStore = {
       users: Array.isArray(parsed.users) ? parsed.users : [],
       profiles: Array.isArray(parsed.profiles) ? parsed.profiles : [],
       weightEntries: Array.isArray(parsed.weightEntries) ? parsed.weightEntries : [],
       foodLogs: Array.isArray(parsed.foodLogs) ? parsed.foodLogs : [],
       bodyMeasurements: Array.isArray(parsed.bodyMeasurements) ? parsed.bodyMeasurements : [],
       savedFoods: Array.isArray(parsed.savedFoods) ? parsed.savedFoods : [],
+      products: Array.isArray(parsed.products) ? parsed.products : [],
+      userFavorites: Array.isArray(parsed.userFavorites) ? parsed.userFavorites : [],
     }
+    
+    // Auto-migrate: convert legacy savedFoods into products + userFavorites
+    if (store.savedFoods.length > 0 && store.products.length === 0) {
+      for (const sf of store.savedFoods) {
+        // Check if product already exists by name+barcode
+        let product = store.products.find(p => 
+          p.name.toLowerCase() === sf.name.toLowerCase() && 
+          (p.barcode === sf.barcode || (!p.barcode && !sf.barcode))
+        )
+        if (!product) {
+          product = {
+            id: sf.id, // reuse ID for simplicity
+            name: sf.name,
+            barcode: sf.barcode,
+            weight: sf.weight,
+            calories: sf.calories,
+            protein: sf.protein,
+            fat: sf.fat,
+            carbs: sf.carbs,
+            createdBy: sf.userId,
+            createdAt: sf.createdAt,
+          }
+          store.products.push(product)
+        }
+        // Create favorite link
+        store.userFavorites.push({
+          id: crypto.randomUUID(),
+          userId: sf.userId,
+          productId: product.id,
+          customWeight: undefined,
+          useCount: sf.useCount,
+          lastUsed: sf.lastUsed,
+          createdAt: sf.createdAt,
+        })
+      }
+      store.savedFoods = [] // Clear legacy data after migration
+      // Write migrated data immediately
+      await writeData(store)
+    }
+    
+    return store
   } catch (error) {
     console.error('[v0] Error reading data file:', error)
     return getEmptyStore()
@@ -73,6 +118,8 @@ async function writeData(data: DataStore): Promise<void> {
     foodLogs: Array.isArray(data.foodLogs) ? data.foodLogs : [],
     bodyMeasurements: Array.isArray(data.bodyMeasurements) ? data.bodyMeasurements : [],
     savedFoods: Array.isArray(data.savedFoods) ? data.savedFoods : [],
+    products: Array.isArray(data.products) ? data.products : [],
+    userFavorites: Array.isArray(data.userFavorites) ? data.userFavorites : [],
   }
   // Write to temp file first, then rename for atomic operation
   const tempFile = DATA_FILE + '.tmp'
@@ -129,6 +176,51 @@ export async function GET(request: Request) {
         .filter(f => f.userId === userId)
         .sort((a, b) => b.useCount - a.useCount) // Most used first
       return Response.json(savedFoods)
+    case 'products':
+      // Return all products (shared catalog), optionally filter by search
+      const productSearch = searchParams.get('search')
+      let products = [...data.products]
+      if (productSearch) {
+        const term = productSearch.toLowerCase()
+        products = products.filter(p => 
+          p.name.toLowerCase().includes(term) || 
+          (p.barcode && p.barcode.includes(term))
+        )
+      }
+      return Response.json(products)
+    case 'userFavorites':
+      if (!userId) return Response.json([])
+      const favorites = data.userFavorites
+        .filter(f => f.userId === userId)
+        .sort((a, b) => b.useCount - a.useCount)
+      return Response.json(favorites)
+    case 'userFavoritesWithProducts':
+      // Join favorites with product data for the current user
+      if (!userId) return Response.json([])
+      const userFavs = data.userFavorites.filter(f => f.userId === userId)
+      const joined = userFavs
+        .map(fav => {
+          const product = data.products.find(p => p.id === fav.productId)
+          if (!product) return null
+          return {
+            favoriteId: fav.id,
+            productId: product.id,
+            name: product.name,
+            barcode: product.barcode,
+            weight: fav.customWeight || product.weight,
+            calories: product.calories,
+            protein: product.protein,
+            fat: product.fat,
+            carbs: product.carbs,
+            useCount: fav.useCount,
+            lastUsed: fav.lastUsed,
+            createdBy: product.createdBy,
+            isFavorite: true,
+          }
+        })
+        .filter(Boolean)
+        .sort((a, b) => (b?.useCount ?? 0) - (a?.useCount ?? 0))
+      return Response.json(joined)
     default:
       return Response.json(data)
   }
@@ -204,6 +296,26 @@ export async function POST(request: Request) {
         }
         break
       }
+      case 'product': {
+        const product = newData as Product
+        const existingIndex = store.products.findIndex(p => p.id === product.id)
+        if (existingIndex >= 0) {
+          store.products[existingIndex] = { ...store.products[existingIndex], ...product }
+        } else {
+          store.products.push(product)
+        }
+        break
+      }
+      case 'userFavorite': {
+        const fav = newData as UserFavorite
+        const existingIndex = store.userFavorites.findIndex(f => f.id === fav.id)
+        if (existingIndex >= 0) {
+          store.userFavorites[existingIndex] = { ...store.userFavorites[existingIndex], ...fav }
+        } else {
+          store.userFavorites.push(fav)
+        }
+        break
+      }
     }
 
     await writeData(store)
@@ -236,6 +348,14 @@ export async function DELETE(request: Request) {
         break
       case 'savedFood':
         store.savedFoods = store.savedFoods.filter(f => f.id !== id)
+        break
+      case 'product':
+        store.products = store.products.filter(p => p.id !== id)
+        // Also remove all favorites referencing this product
+        store.userFavorites = store.userFavorites.filter(f => f.productId !== id)
+        break
+      case 'userFavorite':
+        store.userFavorites = store.userFavorites.filter(f => f.id !== id)
         break
     }
 

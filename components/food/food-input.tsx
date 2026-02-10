@@ -6,8 +6,14 @@ import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAuth } from '@/lib/auth-context'
-import { saveFoodLog, getSavedFoodsByUserId, saveSavedFood } from '@/lib/api-storage'
-import type { FoodItem, FoodLog, SavedFood } from '@/lib/types'
+import {
+  saveFoodLog,
+  getUserFavoritesWithProducts,
+  saveProduct,
+  saveUserFavorite,
+  type FavoriteWithProduct,
+} from '@/lib/api-storage'
+import type { FoodItem, FoodLog, Product, UserFavorite } from '@/lib/types'
 import { Loader2, Plus, Search, Clock, Star, Pencil, Check, X, Bookmark, AlertTriangle, RotateCcw } from 'lucide-react'
 
 interface FoodInputProps {
@@ -54,34 +60,34 @@ export function FoodInput({ onFoodAdded }: FoodInputProps) {
   const [error, setError] = useState<string | null>(null)
   const [parsedItems, setParsedItems] = useState<EditableFoodItem[] | null>(null)
   const [originalItems, setOriginalItems] = useState<Map<number, FoodItem>>(new Map())
-  const [savedFoods, setSavedFoods] = useState<SavedFood[]>([])
+  const [favProducts, setFavProducts] = useState<FavoriteWithProduct[]>([])
   const [showSuggestions, setShowSuggestions] = useState(false)
-  const [filteredSuggestions, setFilteredSuggestions] = useState<SavedFood[]>([])
+  const [filteredSuggestions, setFilteredSuggestions] = useState<FavoriteWithProduct[]>([])
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const suggestionsRef = useRef<HTMLDivElement>(null)
 
-  // Load saved foods on mount
+  // Load user's favorites with product data on mount
   useEffect(() => {
     if (user) {
-      getSavedFoodsByUserId(user.id).then(foods => {
-        setSavedFoods(Array.isArray(foods) ? foods : [])
+      getUserFavoritesWithProducts(user.id).then(data => {
+        setFavProducts(Array.isArray(data) ? data : [])
       })
     }
   }, [user])
 
   // Filter suggestions based on input
   useEffect(() => {
-    if (input.trim().length > 0 && savedFoods.length > 0) {
+    if (input.trim().length > 0 && favProducts.length > 0) {
       const searchTerm = input.toLowerCase()
-      const filtered = savedFoods
-        .filter(food => food.name.toLowerCase().includes(searchTerm))
+      const filtered = favProducts
+        .filter(fp => fp.name.toLowerCase().includes(searchTerm))
         .slice(0, 5)
       setFilteredSuggestions(filtered)
       setShowSuggestions(filtered.length > 0)
     } else {
       setShowSuggestions(false)
     }
-  }, [input, savedFoods])
+  }, [input, favProducts])
 
   // Click outside to close suggestions
   useEffect(() => {
@@ -108,18 +114,18 @@ export function FoodInput({ onFoodAdded }: FoodInputProps) {
     }
   }
 
-  const handleSelectSuggestion = (food: SavedFood) => {
-    // DB stores macros per 100g. Keep source for future recalculations.
+  const handleSelectSuggestion = (fp: FavoriteWithProduct) => {
+    // Product data stores macros per 100g. Keep source for future recalculations.
     const base: Per100gBase = {
-      calories: food.calories,
-      protein: food.protein,
-      fat: food.fat,
-      carbs: food.carbs,
+      calories: fp.calories,
+      protein: fp.protein,
+      fat: fp.fat,
+      carbs: fp.carbs,
     }
-    const scaled = scaleFromBase(base, food.weight)
+    const scaled = scaleFromBase(base, fp.weight)
     const newItem: EditableFoodItem = {
-      name: food.name,
-      weight: food.weight,
+      name: fp.name,
+      weight: fp.weight,
       ...scaled,
       quantity: 1,
       sourcePer100g: base,
@@ -128,18 +134,24 @@ export function FoodInput({ onFoodAdded }: FoodInputProps) {
     setInput('')
     setShowSuggestions(false)
     
-    // Update use count
-    updateSavedFoodUseCount(food)
+    // Update use count on the favorite
+    updateFavoriteUseCount(fp)
   }
 
-  const updateSavedFoodUseCount = async (food: SavedFood) => {
-    const updatedFood: SavedFood = {
-      ...food,
-      useCount: food.useCount + 1,
+  const updateFavoriteUseCount = async (fp: FavoriteWithProduct) => {
+    const updatedFav: UserFavorite = {
+      id: fp.favoriteId,
+      userId: user!.id,
+      productId: fp.productId,
+      useCount: fp.useCount + 1,
       lastUsed: new Date().toISOString(),
+      createdAt: fp.lastUsed, // preserve original
     }
-    await saveSavedFood(updatedFood)
-    setSavedFoods(prev => prev.map(f => f.id === food.id ? updatedFood : f))
+    await saveUserFavorite(updatedFav)
+    setFavProducts(prev => prev.map(f => f.favoriteId === fp.favoriteId 
+      ? { ...f, useCount: updatedFav.useCount, lastUsed: updatedFav.lastUsed } 
+      : f
+    ))
   }
 
   const handleParse = async () => {
@@ -320,50 +332,104 @@ export function FoodInput({ onFoodAdded }: FoodInputProps) {
 
     const weight = item.weight || 100
 
-    // Check if already exists
-    const existing = savedFoods.find(f => 
-      f.name.toLowerCase() === item.name.toLowerCase() && f.userId === user.id
+    // Check if product already exists in user's favorites
+    const existingFav = favProducts.find(f => 
+      f.name.toLowerCase() === item.name.toLowerCase()
     )
     
-    if (existing) {
+    if (existingFav) {
       // Check if per-100g values have changed (user edited macros)
       const macrosChanged =
-        Math.abs(existing.protein - per100.protein) > 0.2 ||
-        Math.abs(existing.fat - per100.fat) > 0.2 ||
-        Math.abs(existing.carbs - per100.carbs) > 0.2
+        Math.abs(existingFav.protein - per100.protein) > 0.2 ||
+        Math.abs(existingFav.fat - per100.fat) > 0.2 ||
+        Math.abs(existingFav.carbs - per100.carbs) > 0.2
 
-      const updated: SavedFood = {
-        ...existing,
-        useCount: existing.useCount + 1,
-        lastUsed: new Date().toISOString(),
-        // Update macros and serving weight if user edited them
-        ...(macrosChanged && {
+      // Update product in shared catalog if macros changed and user is creator
+      if (macrosChanged && existingFav.createdBy === user.id) {
+        const updatedProduct: Product = {
+          id: existingFav.productId,
+          name: item.name,
           weight,
           calories: per100.calories,
           protein: per100.protein,
           fat: per100.fat,
           carbs: per100.carbs,
-        }),
+          createdBy: user.id,
+          createdAt: existingFav.lastUsed,
+        }
+        await saveProduct(updatedProduct)
       }
-      await saveSavedFood(updated)
-      setSavedFoods(prev => prev.map(f => f.id === existing.id ? updated : f))
-    } else {
-      // Create new with per-100g values and the actual weight as default serving
-      const newSavedFood: SavedFood = {
-        id: crypto.randomUUID(),
+
+      // Bump use count on favorite
+      const updatedFav: UserFavorite = {
+        id: existingFav.favoriteId,
         userId: user.id,
+        productId: existingFav.productId,
+        useCount: existingFav.useCount + 1,
+        lastUsed: new Date().toISOString(),
+        createdAt: existingFav.lastUsed,
+      }
+      await saveUserFavorite(updatedFav)
+      setFavProducts(prev => prev.map(f => 
+        f.favoriteId === existingFav.favoriteId 
+          ? { 
+              ...f, 
+              useCount: updatedFav.useCount, 
+              lastUsed: updatedFav.lastUsed,
+              ...(macrosChanged && existingFav.createdBy === user.id && {
+                calories: per100.calories,
+                protein: per100.protein,
+                fat: per100.fat,
+                carbs: per100.carbs,
+                weight,
+              }),
+            } 
+          : f
+      ))
+    } else {
+      // Create new product in shared catalog
+      const productId = crypto.randomUUID()
+      const newProduct: Product = {
+        id: productId,
         name: item.name,
         weight,
         calories: per100.calories,
         protein: per100.protein,
         fat: per100.fat,
         carbs: per100.carbs,
+        createdBy: user.id,
+        createdAt: new Date().toISOString(),
+      }
+      await saveProduct(newProduct)
+
+      // Add to user's favorites
+      const favId = crypto.randomUUID()
+      const newFav: UserFavorite = {
+        id: favId,
+        userId: user.id,
+        productId,
         useCount: 1,
         lastUsed: new Date().toISOString(),
         createdAt: new Date().toISOString(),
       }
-      await saveSavedFood(newSavedFood)
-      setSavedFoods(prev => [newSavedFood, ...prev])
+      await saveUserFavorite(newFav)
+
+      // Update local state
+      const newFavWithProduct: FavoriteWithProduct = {
+        favoriteId: favId,
+        productId,
+        name: newProduct.name,
+        weight: newProduct.weight,
+        calories: newProduct.calories,
+        protein: newProduct.protein,
+        fat: newProduct.fat,
+        carbs: newProduct.carbs,
+        useCount: 1,
+        lastUsed: newFav.lastUsed,
+        createdBy: user.id,
+        isFavorite: true,
+      }
+      setFavProducts(prev => [newFavWithProduct, ...prev])
     }
   }
 
@@ -446,21 +512,21 @@ export function FoodInput({ onFoodAdded }: FoodInputProps) {
                 <Clock className="h-3 w-3" />
                 Из вашей истории
               </div>
-              {filteredSuggestions.map((food) => (
+              {filteredSuggestions.map((fp) => (
                 <button
-                  key={food.id}
-                  onClick={() => handleSelectSuggestion(food)}
+                  key={fp.favoriteId}
+                  onClick={() => handleSelectSuggestion(fp)}
                   className="w-full px-3 py-3 sm:py-2 text-left hover:bg-muted flex items-center justify-between transition-colors"
                 >
                   <div>
-                    <div className="font-medium">{food.name}</div>
+                    <div className="font-medium">{fp.name}</div>
                     <div className="text-xs text-muted-foreground">
-                      {food.weight}г • {Math.round(food.calories * food.weight / 100)} ккал
+                      {fp.weight}г {' \u2022 '} {Math.round(fp.calories * fp.weight / 100)} ккал
                     </div>
                   </div>
                   <div className="text-xs text-muted-foreground flex items-center gap-1">
                     <Star className="h-3 w-3" />
-                    {food.useCount}
+                    {fp.useCount}
                   </div>
                 </button>
               ))}
@@ -488,22 +554,22 @@ export function FoodInput({ onFoodAdded }: FoodInputProps) {
           </Button>
         </div>
 
-        {/* Quick add from frequent foods */}
-        {savedFoods.length > 0 && !parsedItems && (
+        {/* Quick add from frequent foods (favorites) */}
+        {favProducts.length > 0 && !parsedItems && (
           <div className="space-y-2">
             <div className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
               <Star className="h-4 w-4" />
               Частые продукты
             </div>
             <div className="flex flex-wrap gap-2">
-              {savedFoods.slice(0, 6).map((food) => (
+              {favProducts.slice(0, 6).map((fp) => (
                 <button
-                  key={food.id}
-                  onClick={() => handleSelectSuggestion(food)}
+                  key={fp.favoriteId}
+                  onClick={() => handleSelectSuggestion(fp)}
                   className="px-4 py-2.5 sm:px-3 sm:py-1.5 text-sm bg-muted hover:bg-muted/80 rounded-full transition-colors flex items-center gap-1"
                 >
-                  {food.name}
-                  <span className="text-xs text-muted-foreground">({Math.round(food.calories * food.weight / 100)})</span>
+                  {fp.name}
+                  <span className="text-xs text-muted-foreground">({Math.round(fp.calories * fp.weight / 100)})</span>
                 </button>
               ))}
             </div>

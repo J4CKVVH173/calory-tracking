@@ -1,4 +1,4 @@
-import type { User, UserProfile, WeightEntry, FoodLog, BodyMeasurement, SavedFood } from './types'
+import type { User, UserProfile, WeightEntry, FoodLog, BodyMeasurement, SavedFood, Product, UserFavorite } from './types'
 
 const API_BASE = '/api/data'
 
@@ -104,6 +104,71 @@ export async function saveSavedFood(food: SavedFood): Promise<void> {
 
 export async function deleteSavedFood(foodId: string): Promise<void> {
   await fetch(`${API_BASE}?type=savedFood&id=${encodeURIComponent(foodId)}`, {
+    method: 'DELETE',
+  })
+}
+
+// ─── Shared product catalog ───
+
+export async function getProducts(search?: string): Promise<Product[]> {
+  const params = new URLSearchParams({ type: 'products' })
+  if (search) params.set('search', search)
+  const res = await fetch(`${API_BASE}?${params}`)
+  return res.json()
+}
+
+export async function saveProduct(product: Product): Promise<void> {
+  await fetch(API_BASE, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type: 'product', data: product }),
+  })
+}
+
+export async function deleteProduct(productId: string): Promise<void> {
+  await fetch(`${API_BASE}?type=product&id=${encodeURIComponent(productId)}`, {
+    method: 'DELETE',
+  })
+}
+
+// ─── User favorites ───
+
+export interface FavoriteWithProduct {
+  favoriteId: string
+  productId: string
+  name: string
+  barcode?: string
+  weight: number
+  calories: number
+  protein: number
+  fat: number
+  carbs: number
+  useCount: number
+  lastUsed: string
+  createdBy: string
+  isFavorite: boolean
+}
+
+export async function getUserFavoritesWithProducts(userId: string): Promise<FavoriteWithProduct[]> {
+  const res = await fetch(`${API_BASE}?type=userFavoritesWithProducts&userId=${encodeURIComponent(userId)}`)
+  return res.json()
+}
+
+export async function getUserFavorites(userId: string): Promise<UserFavorite[]> {
+  const res = await fetch(`${API_BASE}?type=userFavorites&userId=${encodeURIComponent(userId)}`)
+  return res.json()
+}
+
+export async function saveUserFavorite(fav: UserFavorite): Promise<void> {
+  await fetch(API_BASE, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type: 'userFavorite', data: fav }),
+  })
+}
+
+export async function deleteUserFavorite(favId: string): Promise<void> {
+  await fetch(`${API_BASE}?type=userFavorite&id=${encodeURIComponent(favId)}`, {
     method: 'DELETE',
   })
 }

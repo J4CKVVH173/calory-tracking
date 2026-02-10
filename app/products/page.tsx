@@ -6,8 +6,15 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { useAuth } from '@/lib/auth-context'
-import { getSavedFoodsByUserId, saveSavedFood, deleteSavedFood } from '@/lib/api-storage'
-import type { SavedFood } from '@/lib/types'
+import {
+  getProducts,
+  saveProduct,
+  deleteProduct,
+  getUserFavorites,
+  saveUserFavorite,
+  deleteUserFavorite,
+} from '@/lib/api-storage'
+import type { Product, UserFavorite } from '@/lib/types'
 import { BarcodeScanner } from '@/components/products/barcode-scanner'
 import {
   Search,
@@ -20,6 +27,8 @@ import {
   ArrowUpDown,
   Loader2,
   ScanBarcode,
+  Star,
+  Globe,
 } from 'lucide-react'
 
 /** Auto-calculate calories from macronutrients: P*4 + F*9 + C*4 */
@@ -30,8 +39,19 @@ function calcCalories(protein: string | number, fat: string | number, carbs: str
   return Math.round(p * 4 + f * 9 + c * 4)
 }
 
-type SortField = 'name' | 'calories' | 'protein' | 'useCount' | 'lastUsed'
+/** Declension for "продукт" */
+function productCountLabel(n: number): string {
+  const abs = Math.abs(n) % 100
+  const last = abs % 10
+  if (abs > 10 && abs < 20) return 'продуктов'
+  if (last > 1 && last < 5) return 'продукта'
+  if (last === 1) return 'продукт'
+  return 'продуктов'
+}
+
+type SortField = 'name' | 'calories' | 'protein' | 'useCount'
 type SortDir = 'asc' | 'desc'
+type ViewMode = 'all' | 'favorites'
 
 interface BarcodeProduct {
   name: string
@@ -42,18 +62,27 @@ interface BarcodeProduct {
   carbs: number
 }
 
+/** Row data combining product + optional favorite info */
+interface ProductRow {
+  product: Product
+  favorite?: UserFavorite
+  useCount: number
+}
+
 export default function ProductsPage() {
   const { user, isLoading: authLoading } = useAuth()
   const router = useRouter()
-  const [foods, setFoods] = useState<SavedFood[]>([])
+  const [products, setProducts] = useState<Product[]>([])
+  const [favorites, setFavorites] = useState<UserFavorite[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [sortField, setSortField] = useState<SortField>('useCount')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
+  const [viewMode, setViewMode] = useState<ViewMode>('all')
 
   // Editing state
   const [editingId, setEditingId] = useState<string | null>(null)
-  const [editValues, setEditValues] = useState<Partial<SavedFood> | null>(null)
+  const [editValues, setEditValues] = useState<Partial<Product> | null>(null)
 
   // Add product states
   const [showAddForm, setShowAddForm] = useState(false)
@@ -107,59 +136,79 @@ export default function ProductsPage() {
       return
     }
     if (user) {
-      loadFoods()
+      loadData()
     }
   }, [user, authLoading, router])
 
-  const loadFoods = async () => {
+  const loadData = async () => {
     if (!user) return
     setIsLoading(true)
     try {
-      const data = await getSavedFoodsByUserId(user.id)
-      setFoods(Array.isArray(data) ? data : [])
+      const [productsData, favsData] = await Promise.all([
+        getProducts(),
+        getUserFavorites(user.id),
+      ])
+      setProducts(Array.isArray(productsData) ? productsData : [])
+      setFavorites(Array.isArray(favsData) ? favsData : [])
     } catch (error) {
-      console.error('Error loading foods:', error)
+      console.error('Error loading products:', error)
     } finally {
       setIsLoading(false)
     }
   }
 
-  const filteredAndSorted = useMemo(() => {
-    let result = [...foods]
+  // Build favorite lookup: productId -> UserFavorite
+  const favMap = useMemo(() => {
+    const map = new Map<string, UserFavorite>()
+    for (const f of favorites) {
+      map.set(f.productId, f)
+    }
+    return map
+  }, [favorites])
 
+  const filteredAndSorted = useMemo(() => {
+    let rows: ProductRow[] = products.map(p => ({
+      product: p,
+      favorite: favMap.get(p.id),
+      useCount: favMap.get(p.id)?.useCount ?? 0,
+    }))
+
+    // View mode filter
+    if (viewMode === 'favorites') {
+      rows = rows.filter(r => r.favorite)
+    }
+
+    // Search filter
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase()
-      result = result.filter(
-        f =>
-          f.name.toLowerCase().includes(term) ||
-          (f.barcode && f.barcode.includes(term))
+      rows = rows.filter(
+        r =>
+          r.product.name.toLowerCase().includes(term) ||
+          (r.product.barcode && r.product.barcode.includes(term))
       )
     }
 
-    result.sort((a, b) => {
+    rows.sort((a, b) => {
       let cmp = 0
       switch (sortField) {
         case 'name':
-          cmp = a.name.localeCompare(b.name, 'ru')
+          cmp = a.product.name.localeCompare(b.product.name, 'ru')
           break
         case 'calories':
-          cmp = a.calories - b.calories
+          cmp = a.product.calories - b.product.calories
           break
         case 'protein':
-          cmp = a.protein - b.protein
+          cmp = a.product.protein - b.product.protein
           break
         case 'useCount':
           cmp = a.useCount - b.useCount
-          break
-        case 'lastUsed':
-          cmp = new Date(a.lastUsed).getTime() - new Date(b.lastUsed).getTime()
           break
       }
       return sortDir === 'desc' ? -cmp : cmp
     })
 
-    return result
-  }, [foods, searchTerm, sortField, sortDir])
+    return rows
+  }, [products, favorites, favMap, searchTerm, sortField, sortDir, viewMode])
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -167,6 +216,27 @@ export default function ProductsPage() {
     } else {
       setSortField(field)
       setSortDir('desc')
+    }
+  }
+
+  // Toggle favorite
+  const toggleFavorite = async (productId: string) => {
+    if (!user) return
+    const existing = favMap.get(productId)
+    if (existing) {
+      await deleteUserFavorite(existing.id)
+      setFavorites(prev => prev.filter(f => f.id !== existing.id))
+    } else {
+      const newFav: UserFavorite = {
+        id: crypto.randomUUID(),
+        userId: user.id,
+        productId,
+        useCount: 0,
+        lastUsed: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+      }
+      await saveUserFavorite(newFav)
+      setFavorites(prev => [...prev, newFav])
     }
   }
 
@@ -178,8 +248,8 @@ export default function ProductsPage() {
     setIsLookingUp(true)
     setShowAddForm(true)
 
-    // Check if product with this barcode already exists in user's database
-    const existing = foods.find(f => f.barcode === barcode)
+    // Check if product with this barcode already exists in shared catalog
+    const existing = products.find(f => f.barcode === barcode)
     if (existing) {
       setNewProduct({
         name: existing.name,
@@ -190,7 +260,7 @@ export default function ProductsPage() {
         fat: String(existing.fat),
         carbs: String(existing.carbs),
       })
-      setAutoCalcNew(false) // Real data from DB, don't auto-calc
+      setAutoCalcNew(false)
       setIsLookingUp(false)
       return
     }
@@ -211,7 +281,7 @@ export default function ProductsPage() {
           fat: String(p.fat || ''),
           carbs: String(p.carbs || ''),
         })
-        setAutoCalcNew(false) // Real data from Open Food Facts
+        setAutoCalcNew(false)
       } else {
         setLookupNotFound(true)
         setNewProduct(prev => ({
@@ -233,20 +303,19 @@ export default function ProductsPage() {
     }
   }
 
-  const startEdit = (food: SavedFood) => {
-    setEditingId(food.id)
+  const startEdit = (product: Product) => {
+    setEditingId(product.id)
     setEditValues({
-      name: food.name,
-      barcode: food.barcode,
-      weight: food.weight,
-      calories: food.calories,
-      protein: food.protein,
-      fat: food.fat,
-      carbs: food.carbs,
+      name: product.name,
+      barcode: product.barcode,
+      weight: product.weight,
+      calories: product.calories,
+      protein: product.protein,
+      fat: product.fat,
+      carbs: product.carbs,
     })
-    // Enable auto-calc only if current calories roughly match the formula
-    const formulaCalories = calcCalories(food.protein, food.fat, food.carbs)
-    setAutoCalcEdit(Math.abs(food.calories - formulaCalories) <= 5)
+    const formulaCalories = calcCalories(product.protein, product.fat, product.carbs)
+    setAutoCalcEdit(Math.abs(product.calories - formulaCalories) <= 5)
   }
 
   const cancelEdit = () => {
@@ -256,36 +325,37 @@ export default function ProductsPage() {
 
   const saveEdit = async () => {
     if (!editingId || !editValues) return
-    const food = foods.find(f => f.id === editingId)
-    if (!food) return
+    const product = products.find(p => p.id === editingId)
+    if (!product) return
 
-    const updated: SavedFood = {
-      ...food,
-      name: editValues.name || food.name,
-      barcode: editValues.barcode || food.barcode,
-      weight: editValues.weight ?? food.weight,
-      calories: editValues.calories ?? food.calories,
-      protein: editValues.protein ?? food.protein,
-      fat: editValues.fat ?? food.fat,
-      carbs: editValues.carbs ?? food.carbs,
+    const updated: Product = {
+      ...product,
+      name: editValues.name || product.name,
+      barcode: editValues.barcode || product.barcode,
+      weight: editValues.weight ?? product.weight,
+      calories: editValues.calories ?? product.calories,
+      protein: editValues.protein ?? product.protein,
+      fat: editValues.fat ?? product.fat,
+      carbs: editValues.carbs ?? product.carbs,
     }
 
-    await saveSavedFood(updated)
-    setFoods(prev => prev.map(f => (f.id === editingId ? updated : f)))
+    await saveProduct(updated)
+    setProducts(prev => prev.map(p => (p.id === editingId ? updated : p)))
     cancelEdit()
   }
 
   const handleDelete = async (id: string) => {
-    await deleteSavedFood(id)
-    setFoods(prev => prev.filter(f => f.id !== id))
+    await deleteProduct(id)
+    setProducts(prev => prev.filter(p => p.id !== id))
+    // favorites referencing this product are cleaned server-side
+    setFavorites(prev => prev.filter(f => f.productId !== id))
   }
 
   const handleAddProduct = async () => {
     if (!user || !newProduct.name.trim()) return
 
-    const food: SavedFood = {
+    const product: Product = {
       id: crypto.randomUUID(),
-      userId: user.id,
       name: newProduct.name.trim(),
       barcode: newProduct.barcode.trim() || undefined,
       weight: parseFloat(newProduct.weight) || 100,
@@ -293,13 +363,25 @@ export default function ProductsPage() {
       protein: parseFloat(newProduct.protein) || 0,
       fat: parseFloat(newProduct.fat) || 0,
       carbs: parseFloat(newProduct.carbs) || 0,
+      createdBy: user.id,
+      createdAt: new Date().toISOString(),
+    }
+
+    await saveProduct(product)
+    setProducts(prev => [product, ...prev])
+
+    // Auto-add to favorites
+    const fav: UserFavorite = {
+      id: crypto.randomUUID(),
+      userId: user.id,
+      productId: product.id,
       useCount: 0,
       lastUsed: new Date().toISOString(),
       createdAt: new Date().toISOString(),
     }
+    await saveUserFavorite(fav)
+    setFavorites(prev => [...prev, fav])
 
-    await saveSavedFood(food)
-    setFoods(prev => [food, ...prev])
     resetAddForm()
   }
 
@@ -321,6 +403,8 @@ export default function ProductsPage() {
     </button>
   )
 
+  const favoritesCount = favorites.length
+
   if (authLoading || isLoading) {
     return (
       <div className="container max-w-4xl mx-auto px-2 py-4 sm:px-4 sm:py-8">
@@ -338,13 +422,12 @@ export default function ProductsPage() {
         <div>
           <h1 className="text-2xl sm:text-3xl font-bold text-balance">База продуктов</h1>
           <p className="text-muted-foreground mt-1 text-sm">
-            {foods.length}{' '}
-            {foods.length === 1
-              ? 'продукт'
-              : foods.length < 5
-                ? 'продукта'
-                : 'продуктов'}{' '}
-            в вашей базе
+            {products.length} {productCountLabel(products.length)} в общей базе
+            {favoritesCount > 0 && (
+              <span className="ml-1">
+                / {favoritesCount} в избранном
+              </span>
+            )}
           </p>
         </div>
         <div className="flex gap-2">
@@ -396,7 +479,7 @@ export default function ProductsPage() {
                   ? `Продукт с кодом ${scannedBarcode} не найден. Заполните данные вручную.`
                   : scannedBarcode
                     ? 'Данные из Open Food Facts. Проверьте и сохраните.'
-                    : 'Добавьте продукт вручную или отсканируйте штрих-код'}
+                    : 'Продукт будет доступен всем пользователям'}
             </CardDescription>
           </CardHeader>
           <CardContent className="px-3 sm:px-6 space-y-3">
@@ -404,7 +487,7 @@ export default function ProductsPage() {
               <div className="flex items-center justify-center py-6 gap-3">
                 <Loader2 className="h-5 w-5 animate-spin text-primary" />
                 <span className="text-sm text-muted-foreground">
-                  Ищем продукт по коду {scannedBarcode}...
+                  {'Ищем продукт по коду ' + scannedBarcode + '...'}
                 </span>
               </div>
             ) : (
@@ -444,7 +527,8 @@ export default function ProductsPage() {
                 <div className="grid grid-cols-4 gap-2">
                   <div>
                     <div className="text-[10px] text-muted-foreground mb-0.5">
-                      Ккал {autoCalcNew && <span className="text-primary">*</span>}
+                      {'Ккал '}
+                      {autoCalcNew && <span className="text-primary">*</span>}
                     </div>
                     <Input
                       type="number"
@@ -530,15 +614,42 @@ export default function ProductsPage() {
         </Card>
       )}
 
-      {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Поиск продуктов или штрих-код..."
-          value={searchTerm}
-          onChange={e => setSearchTerm(e.target.value)}
-          className="pl-10"
-        />
+      {/* View mode toggle + Search */}
+      <div className="flex gap-2 items-center">
+        <div className="flex rounded-lg border overflow-hidden shrink-0">
+          <button
+            onClick={() => setViewMode('all')}
+            className={`px-3 py-2 text-xs font-medium transition-colors flex items-center gap-1.5 ${
+              viewMode === 'all' ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'
+            }`}
+          >
+            <Globe className="h-3.5 w-3.5" />
+            Все
+          </button>
+          <button
+            onClick={() => setViewMode('favorites')}
+            className={`px-3 py-2 text-xs font-medium transition-colors flex items-center gap-1.5 ${
+              viewMode === 'favorites' ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'
+            }`}
+          >
+            <Star className="h-3.5 w-3.5" />
+            Избранное
+            {favoritesCount > 0 && (
+              <span className={`text-[10px] ${viewMode === 'favorites' ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
+                {favoritesCount}
+              </span>
+            )}
+          </button>
+        </div>
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Поиск продуктов или штрих-код..."
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            className="pl-10"
+          />
+        </div>
       </div>
 
       {/* Products list */}
@@ -547,14 +658,20 @@ export default function ProductsPage() {
           <CardContent className="flex flex-col items-center justify-center py-12 text-center">
             <Database className="h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="font-medium text-lg mb-1">
-              {searchTerm ? 'Ничего не найдено' : 'База пуста'}
+              {searchTerm
+                ? 'Ничего не найдено'
+                : viewMode === 'favorites'
+                  ? 'Нет избранных продуктов'
+                  : 'База пуста'}
             </h3>
             <p className="text-sm text-muted-foreground max-w-sm">
               {searchTerm
                 ? 'Попробуйте изменить запрос'
-                : 'Добавьте продукт вручную или отсканируйте штрих-код'}
+                : viewMode === 'favorites'
+                  ? 'Нажмите на звездочку рядом с продуктом, чтобы добавить его в избранное'
+                  : 'Добавьте продукт вручную или отсканируйте штрих-код'}
             </p>
-            {!searchTerm && (
+            {!searchTerm && viewMode !== 'favorites' && (
               <div className="flex gap-2 mt-4">
                 <Button
                   variant="outline"
@@ -579,6 +696,7 @@ export default function ProductsPage() {
             <table className="w-full text-sm">
               <thead className="bg-muted">
                 <tr>
+                  <th className="p-3 w-10" />
                   <th className="text-left p-3">
                     <SortButton field="name" label="Продукт" />
                   </th>
@@ -596,13 +714,15 @@ export default function ProductsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filteredAndSorted.map(food => {
-                  const isEditing = editingId === food.id
+                {filteredAndSorted.map(({ product, favorite }) => {
+                  const isEditing = editingId === product.id
+                  const isFav = !!favorite
+                  const canEdit = user && product.createdBy === user.id
 
                   if (isEditing && editValues) {
                     return (
-                      <tr key={food.id} className="border-t">
-                        <td colSpan={6} className="p-3">
+                      <tr key={product.id} className="border-t">
+                        <td colSpan={7} className="p-3">
                           <div className="space-y-2 bg-muted/30 rounded-lg p-3">
                             <div className="flex items-center gap-2">
                               <Input
@@ -668,7 +788,8 @@ export default function ProductsPage() {
                             <div className="grid grid-cols-4 gap-2">
                               <div>
                                 <div className="text-[10px] text-muted-foreground mb-0.5">
-                                  Ккал {autoCalcEdit && <span className="text-primary">*</span>}
+                                  {'Ккал '}
+                                  {autoCalcEdit && <span className="text-primary">*</span>}
                                 </div>
                                 <Input
                                   type="number"
@@ -727,49 +848,66 @@ export default function ProductsPage() {
 
                   return (
                     <tr
-                      key={food.id}
+                      key={product.id}
                       className="border-t group hover:bg-muted/30 transition-colors"
                     >
+                      <td className="p-2 text-center">
+                        <button
+                          onClick={() => toggleFavorite(product.id)}
+                          className="p-1 rounded transition-colors hover:bg-muted"
+                          title={isFav ? 'Убрать из избранного' : 'Добавить в избранное'}
+                        >
+                          <Star
+                            className={`h-4 w-4 transition-colors ${
+                              isFav ? 'fill-yellow-500 text-yellow-500' : 'text-muted-foreground/40'
+                            }`}
+                          />
+                        </button>
+                      </td>
                       <td className="p-3">
-                        <div className="font-medium">{food.name}</div>
-                        {food.barcode && (
+                        <div className="font-medium">{product.name}</div>
+                        {product.barcode && (
                           <div className="flex items-center gap-1 mt-0.5">
                             <ScanBarcode className="h-3 w-3 text-muted-foreground" />
                             <span className="text-[10px] text-muted-foreground font-mono">
-                              {food.barcode}
+                              {product.barcode}
                             </span>
                           </div>
                         )}
                       </td>
                       <td className="text-right p-3 text-muted-foreground">
-                        {food.weight}г
+                        {product.weight}г
                       </td>
-                      <td className="text-right p-3">{food.calories}</td>
+                      <td className="text-right p-3">{product.calories}</td>
                       <td className="text-right p-3 text-muted-foreground hidden sm:table-cell">
-                        {Math.round(food.protein)}/{Math.round(food.fat)}/
-                        {Math.round(food.carbs)}
+                        {Math.round(product.protein)}/{Math.round(product.fat)}/
+                        {Math.round(product.carbs)}
                       </td>
                       <td className="text-right p-3 text-muted-foreground text-xs hidden sm:table-cell">
-                        {food.useCount}
+                        {favorite?.useCount ?? 0}
                       </td>
                       <td className="p-2">
                         <div className="flex gap-0.5 opacity-60 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 sm:h-7 sm:w-7"
-                            onClick={() => startEdit(food)}
-                          >
-                            <Pencil className="h-3.5 w-3.5 sm:h-3 sm:w-3" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 sm:h-7 sm:w-7 text-destructive"
-                            onClick={() => handleDelete(food.id)}
-                          >
-                            <Trash2 className="h-3.5 w-3.5 sm:h-3 sm:w-3" />
-                          </Button>
+                          {canEdit && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 sm:h-7 sm:w-7"
+                              onClick={() => startEdit(product)}
+                            >
+                              <Pencil className="h-3.5 w-3.5 sm:h-3 sm:w-3" />
+                            </Button>
+                          )}
+                          {canEdit && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 sm:h-7 sm:w-7 text-destructive"
+                              onClick={() => handleDelete(product.id)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5 sm:h-3 sm:w-3" />
+                            </Button>
+                          )}
                         </div>
                       </td>
                     </tr>

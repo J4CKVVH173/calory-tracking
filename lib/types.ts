@@ -83,6 +83,34 @@ export interface BodyMeasurement {
   createdAt: string
 }
 
+// Shared product catalog — accessible to all users.
+// Macros (calories, protein, fat, carbs) are always stored PER 100g.
+// `weight` is the default serving size in grams (e.g. 120g for a yogurt).
+export interface Product {
+  id: string
+  name: string
+  barcode?: string // EAN/UPC barcode
+  weight: number // default serving size in grams
+  calories: number // per 100g
+  protein: number // per 100g
+  fat: number // per 100g
+  carbs: number // per 100g
+  createdBy: string // userId of the user who created the product
+  createdAt: string
+}
+
+// Per-user favorite link to a shared product, with personal usage tracking.
+export interface UserFavorite {
+  id: string
+  userId: string
+  productId: string // references Product.id
+  customWeight?: number // optional per-user override for default serving
+  useCount: number
+  lastUsed: string
+  createdAt: string
+}
+
+// Legacy type alias for backward compatibility during migration
 // Saved food item for user's personal food database
 // Macros (calories, protein, fat, carbs) are always stored PER 100g.
 // `weight` is the default serving size in grams (e.g. 120g for a yogurt).
