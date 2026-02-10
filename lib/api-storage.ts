@@ -125,6 +125,28 @@ export async function saveProduct(product: Product): Promise<void> {
   })
 }
 
+export interface FindOrCreateResult {
+  success: boolean
+  product: Product
+  favorite: UserFavorite
+  isNew: boolean
+  wasExisting: boolean
+}
+
+/**
+ * Server-side deduplication: finds an existing product by name/barcode or creates a new one.
+ * Also ensures a UserFavorite link exists for the given user.
+ * Returns the product (existing or new) and the favorite link.
+ */
+export async function findOrCreateProduct(product: Product, userId: string): Promise<FindOrCreateResult> {
+  const res = await fetch(API_BASE, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ type: 'findOrCreateProduct', data: { product, userId } }),
+  })
+  return res.json()
+}
+
 export async function deleteProduct(productId: string): Promise<void> {
   await fetch(`${API_BASE}?type=product&id=${encodeURIComponent(productId)}`, {
     method: 'DELETE',

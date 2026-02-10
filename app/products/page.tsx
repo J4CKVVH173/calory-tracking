@@ -13,6 +13,7 @@ import {
   getUserFavorites,
   saveUserFavorite,
   deleteUserFavorite,
+  findOrCreateProduct,
 } from '@/lib/api-storage'
 import type { Product, UserFavorite } from '@/lib/types'
 import { BarcodeScanner } from '@/components/products/barcode-scanner'
@@ -354,7 +355,7 @@ export default function ProductsPage() {
   const handleAddProduct = async () => {
     if (!user || !newProduct.name.trim()) return
 
-    const product: Product = {
+    const candidate: Product = {
       id: crypto.randomUUID(),
       name: newProduct.name.trim(),
       barcode: newProduct.barcode.trim() || undefined,
@@ -367,20 +368,17 @@ export default function ProductsPage() {
       createdAt: new Date().toISOString(),
     }
 
-    await saveProduct(product)
-    setProducts(prev => [product, ...prev])
-
-    // Auto-add to favorites
-    const fav: UserFavorite = {
-      id: crypto.randomUUID(),
-      userId: user.id,
-      productId: product.id,
-      useCount: 0,
-      lastUsed: new Date().toISOString(),
-      createdAt: new Date().toISOString(),
+    // Server-side deduplication: reuses existing product if name/barcode matches
+    const result = await findOrCreateProduct(candidate, user.id)
+    
+    if (result.isNew) {
+      setProducts(prev => [result.product, ...prev])
     }
-    await saveUserFavorite(fav)
-    setFavorites(prev => [...prev, fav])
+    // Always ensure favorite is in local state
+    setFavorites(prev => {
+      const exists = prev.some(f => f.id === result.favorite.id)
+      return exists ? prev.map(f => f.id === result.favorite.id ? result.favorite : f) : [...prev, result.favorite]
+    })
 
     resetAddForm()
   }

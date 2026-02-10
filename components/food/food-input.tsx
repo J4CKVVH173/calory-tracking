@@ -9,7 +9,7 @@ import { useAuth } from '@/lib/auth-context'
 import {
   saveFoodLog,
   getUserFavoritesWithProducts,
-  saveProduct,
+  findOrCreateProduct,
   saveUserFavorite,
   type FavoriteWithProduct,
 } from '@/lib/api-storage'
@@ -332,105 +332,48 @@ export function FoodInput({ onFoodAdded }: FoodInputProps) {
 
     const weight = item.weight || 100
 
-    // Check if product already exists in user's favorites
-    const existingFav = favProducts.find(f => 
-      f.name.toLowerCase() === item.name.toLowerCase()
-    )
-    
-    if (existingFav) {
-      // Check if per-100g values have changed (user edited macros)
-      const macrosChanged =
-        Math.abs(existingFav.protein - per100.protein) > 0.2 ||
-        Math.abs(existingFav.fat - per100.fat) > 0.2 ||
-        Math.abs(existingFav.carbs - per100.carbs) > 0.2
-
-      // Update product in shared catalog if macros changed and user is creator
-      if (macrosChanged && existingFav.createdBy === user.id) {
-        const updatedProduct: Product = {
-          id: existingFav.productId,
-          name: item.name,
-          weight,
-          calories: per100.calories,
-          protein: per100.protein,
-          fat: per100.fat,
-          carbs: per100.carbs,
-          createdBy: user.id,
-          createdAt: existingFav.lastUsed,
-        }
-        await saveProduct(updatedProduct)
-      }
-
-      // Bump use count on favorite
-      const updatedFav: UserFavorite = {
-        id: existingFav.favoriteId,
-        userId: user.id,
-        productId: existingFav.productId,
-        useCount: existingFav.useCount + 1,
-        lastUsed: new Date().toISOString(),
-        createdAt: existingFav.lastUsed,
-      }
-      await saveUserFavorite(updatedFav)
-      setFavProducts(prev => prev.map(f => 
-        f.favoriteId === existingFav.favoriteId 
-          ? { 
-              ...f, 
-              useCount: updatedFav.useCount, 
-              lastUsed: updatedFav.lastUsed,
-              ...(macrosChanged && existingFav.createdBy === user.id && {
-                calories: per100.calories,
-                protein: per100.protein,
-                fat: per100.fat,
-                carbs: per100.carbs,
-                weight,
-              }),
-            } 
-          : f
-      ))
-    } else {
-      // Create new product in shared catalog
-      const productId = crypto.randomUUID()
-      const newProduct: Product = {
-        id: productId,
-        name: item.name,
-        weight,
-        calories: per100.calories,
-        protein: per100.protein,
-        fat: per100.fat,
-        carbs: per100.carbs,
-        createdBy: user.id,
-        createdAt: new Date().toISOString(),
-      }
-      await saveProduct(newProduct)
-
-      // Add to user's favorites
-      const favId = crypto.randomUUID()
-      const newFav: UserFavorite = {
-        id: favId,
-        userId: user.id,
-        productId,
-        useCount: 1,
-        lastUsed: new Date().toISOString(),
-        createdAt: new Date().toISOString(),
-      }
-      await saveUserFavorite(newFav)
-
-      // Update local state
-      const newFavWithProduct: FavoriteWithProduct = {
-        favoriteId: favId,
-        productId,
-        name: newProduct.name,
-        weight: newProduct.weight,
-        calories: newProduct.calories,
-        protein: newProduct.protein,
-        fat: newProduct.fat,
-        carbs: newProduct.carbs,
-        useCount: 1,
-        lastUsed: newFav.lastUsed,
-        createdBy: user.id,
-        isFavorite: true,
-      }
-      setFavProducts(prev => [newFavWithProduct, ...prev])
+    // Server-side dedup: finds existing product by name/barcode or creates new one,
+    // and automatically ensures a UserFavorite link for this user.
+    const candidate: Product = {
+      id: crypto.randomUUID(),
+      name: item.name,
+      weight,
+      calories: per100.calories,
+      protein: per100.protein,
+      fat: per100.fat,
+      carbs: per100.carbs,
+      createdBy: user.id,
+      createdAt: new Date().toISOString(),
     }
+
+    const result = await findOrCreateProduct(candidate, user.id)
+    const { product, favorite } = result
+
+    // Update local favorites state
+    const newFavWithProduct: FavoriteWithProduct = {
+      favoriteId: favorite.id,
+      productId: product.id,
+      name: product.name,
+      weight: favorite.customWeight || product.weight,
+      calories: product.calories,
+      protein: product.protein,
+      fat: product.fat,
+      carbs: product.carbs,
+      useCount: favorite.useCount,
+      lastUsed: favorite.lastUsed,
+      createdBy: product.createdBy,
+      isFavorite: true,
+    }
+    
+    setFavProducts(prev => {
+      const existingIdx = prev.findIndex(f => f.productId === product.id)
+      if (existingIdx >= 0) {
+        const updated = [...prev]
+        updated[existingIdx] = newFavWithProduct
+        return updated
+      }
+      return [newFavWithProduct, ...prev]
+    })
   }
 
   const handleSave = async () => {

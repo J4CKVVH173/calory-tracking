@@ -316,6 +316,62 @@ export async function POST(request: Request) {
         }
         break
       }
+      case 'findOrCreateProduct': {
+        // Server-side deduplication: find existing product by normalized name
+        // or barcode, or create a new one. Also ensures a UserFavorite link exists.
+        const { product: incoming, userId } = newData as { product: Product; userId: string }
+        const normName = incoming.name.trim().toLowerCase()
+        
+        // 1. Find by barcode first (strongest match)
+        let existing: Product | undefined
+        if (incoming.barcode) {
+          existing = store.products.find(p => p.barcode && p.barcode === incoming.barcode)
+        }
+        // 2. Fall back to normalized name match
+        if (!existing) {
+          existing = store.products.find(p => p.name.trim().toLowerCase() === normName)
+        }
+        
+        let product: Product
+        let isNew = false
+        if (existing) {
+          product = existing
+        } else {
+          product = { ...incoming, id: incoming.id || crypto.randomUUID() }
+          store.products.push(product)
+          isNew = true
+        }
+        
+        // Ensure UserFavorite link exists for this user
+        let favorite = store.userFavorites.find(
+          f => f.userId === userId && f.productId === product.id
+        )
+        if (favorite) {
+          // Bump use count
+          favorite.useCount += 1
+          favorite.lastUsed = new Date().toISOString()
+        } else {
+          favorite = {
+            id: crypto.randomUUID(),
+            userId,
+            productId: product.id,
+            useCount: 1,
+            lastUsed: new Date().toISOString(),
+            createdAt: new Date().toISOString(),
+          }
+          store.userFavorites.push(favorite)
+        }
+        
+        await writeData(store)
+        release()
+        return Response.json({ 
+          success: true, 
+          product, 
+          favorite, 
+          isNew,
+          wasExisting: !isNew,
+        })
+      }
     }
 
     await writeData(store)
