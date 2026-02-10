@@ -110,9 +110,10 @@ export async function deleteSavedFood(foodId: string): Promise<void> {
 
 // ─── Shared product catalog ───
 
-export async function getProducts(search?: string): Promise<Product[]> {
+export async function getProducts(search?: string, limit?: number): Promise<Product[]> {
   const params = new URLSearchParams({ type: 'products' })
   if (search) params.set('search', search)
+  if (limit) params.set('limit', String(limit))
   const res = await fetch(`${API_BASE}?${params}`)
   return res.json()
 }

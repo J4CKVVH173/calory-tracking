@@ -176,18 +176,34 @@ export async function GET(request: Request) {
         .filter(f => f.userId === userId)
         .sort((a, b) => b.useCount - a.useCount) // Most used first
       return Response.json(savedFoods)
-    case 'products':
+    case 'products': {
       // Return all products (shared catalog), optionally filter by search
       const productSearch = searchParams.get('search')
-      let products = [...data.products]
+      const limitParam = searchParams.get('limit')
+      let filteredProducts = [...data.products]
       if (productSearch) {
+        const searchWords = productSearch.toLowerCase().split(/\s+/).filter(Boolean)
+        filteredProducts = filteredProducts.filter(p => {
+          const name = p.name.toLowerCase()
+          // Every search word must appear in the name (word-level AND matching)
+          return searchWords.every(word => name.includes(word)) ||
+            (p.barcode && p.barcode.includes(productSearch))
+        })
+        // Sort by relevance: exact prefix match first, then by name length (shorter = more relevant)
         const term = productSearch.toLowerCase()
-        products = products.filter(p => 
-          p.name.toLowerCase().includes(term) || 
-          (p.barcode && p.barcode.includes(term))
-        )
+        filteredProducts.sort((a, b) => {
+          const aStartsWith = a.name.toLowerCase().startsWith(term) ? 0 : 1
+          const bStartsWith = b.name.toLowerCase().startsWith(term) ? 0 : 1
+          if (aStartsWith !== bStartsWith) return aStartsWith - bStartsWith
+          return a.name.length - b.name.length
+        })
       }
-      return Response.json(products)
+      const limit = limitParam ? parseInt(limitParam) : 0
+      if (limit > 0) {
+        filteredProducts = filteredProducts.slice(0, limit)
+      }
+      return Response.json(filteredProducts)
+    }
     case 'userFavorites':
       if (!userId) return Response.json([])
       const favorites = data.userFavorites
@@ -320,16 +336,28 @@ export async function POST(request: Request) {
         // Server-side deduplication: find existing product by normalized name
         // or barcode, or create a new one. Also ensures a UserFavorite link exists.
         const { product: incoming, userId } = newData as { product: Product; userId: string }
-        const normName = incoming.name.trim().toLowerCase()
+        
+        // Normalize: trim, collapse whitespace, lowercase
+        const normalize = (s: string) => s.trim().replace(/\s+/g, ' ').toLowerCase()
+        const normName = normalize(incoming.name)
+        // Word set for order-independent matching: "Курица гриль" == "гриль курица"
+        const normWords = normName.split(' ').sort().join(' ')
         
         // 1. Find by barcode first (strongest match)
         let existing: Product | undefined
         if (incoming.barcode) {
           existing = store.products.find(p => p.barcode && p.barcode === incoming.barcode)
         }
-        // 2. Fall back to normalized name match
+        // 2. Exact normalized name match
         if (!existing) {
-          existing = store.products.find(p => p.name.trim().toLowerCase() === normName)
+          existing = store.products.find(p => normalize(p.name) === normName)
+        }
+        // 3. Word-order-independent match (same words, different order)
+        if (!existing) {
+          existing = store.products.find(p => {
+            const pWords = normalize(p.name).split(' ').sort().join(' ')
+            return pWords === normWords
+          })
         }
         
         let product: Product
@@ -337,7 +365,12 @@ export async function POST(request: Request) {
         if (existing) {
           product = existing
         } else {
-          product = { ...incoming, id: incoming.id || crypto.randomUUID() }
+          // Normalize the name for consistent storage (trim, collapse spaces)
+          product = { 
+            ...incoming, 
+            id: incoming.id || crypto.randomUUID(),
+            name: incoming.name.trim().replace(/\s+/g, ' '),
+          }
           store.products.push(product)
           isNew = true
         }

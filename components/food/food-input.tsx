@@ -11,10 +11,11 @@ import {
   getUserFavoritesWithProducts,
   findOrCreateProduct,
   saveUserFavorite,
+  getProducts,
   type FavoriteWithProduct,
 } from '@/lib/api-storage'
 import type { FoodItem, FoodLog, Product, UserFavorite } from '@/lib/types'
-import { Loader2, Plus, Search, Clock, Star, Pencil, Check, X, Bookmark, AlertTriangle, RotateCcw } from 'lucide-react'
+import { Loader2, Plus, Search, Clock, Star, Pencil, Check, X, Bookmark, AlertTriangle, RotateCcw, Globe } from 'lucide-react'
 
 interface FoodInputProps {
   onFoodAdded: () => void
@@ -62,7 +63,10 @@ export function FoodInput({ onFoodAdded }: FoodInputProps) {
   const [originalItems, setOriginalItems] = useState<Map<number, FoodItem>>(new Map())
   const [favProducts, setFavProducts] = useState<FavoriteWithProduct[]>([])
   const [showSuggestions, setShowSuggestions] = useState(false)
-  const [filteredSuggestions, setFilteredSuggestions] = useState<FavoriteWithProduct[]>([])
+  const [filteredFavorites, setFilteredFavorites] = useState<FavoriteWithProduct[]>([])
+  const [catalogResults, setCatalogResults] = useState<Product[]>([])
+  const [isCatalogSearching, setIsCatalogSearching] = useState(false)
+  const catalogSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const suggestionsRef = useRef<HTMLDivElement>(null)
 
@@ -75,19 +79,54 @@ export function FoodInput({ onFoodAdded }: FoodInputProps) {
     }
   }, [user])
 
-  // Filter suggestions based on input
+  // Filter favorites locally + debounced search of shared catalog
   useEffect(() => {
-    if (input.trim().length > 0 && favProducts.length > 0) {
-      const searchTerm = input.toLowerCase()
-      const filtered = favProducts
-        .filter(fp => fp.name.toLowerCase().includes(searchTerm))
-        .slice(0, 5)
-      setFilteredSuggestions(filtered)
-      setShowSuggestions(filtered.length > 0)
-    } else {
+    const trimmed = input.trim()
+    if (trimmed.length === 0) {
       setShowSuggestions(false)
+      setFilteredFavorites([])
+      setCatalogResults([])
+      if (catalogSearchTimer.current) clearTimeout(catalogSearchTimer.current)
+      return
+    }
+
+    // 1. Instant: filter local favorites
+    const searchTerm = trimmed.toLowerCase()
+    const favMatches = favProducts
+      .filter(fp => fp.name.toLowerCase().includes(searchTerm))
+      .slice(0, 4)
+    setFilteredFavorites(favMatches)
+    setShowSuggestions(true)
+
+    // 2. Debounced: search shared catalog (300ms)
+    if (catalogSearchTimer.current) clearTimeout(catalogSearchTimer.current)
+    if (trimmed.length >= 2) {
+      setIsCatalogSearching(true)
+      catalogSearchTimer.current = setTimeout(async () => {
+        try {
+          const results = await getProducts(trimmed, 8)
+          // Exclude products already in favorite matches to avoid duplicates
+          const favProductIds = new Set(favMatches.map(f => f.productId))
+          const uniqueCatalog = results.filter(p => !favProductIds.has(p.id))
+          setCatalogResults(uniqueCatalog.slice(0, 4))
+        } catch {
+          setCatalogResults([])
+        } finally {
+          setIsCatalogSearching(false)
+        }
+      }, 300)
+    } else {
+      setCatalogResults([])
+      setIsCatalogSearching(false)
     }
   }, [input, favProducts])
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (catalogSearchTimer.current) clearTimeout(catalogSearchTimer.current)
+    }
+  }, [])
 
   // Click outside to close suggestions
   useEffect(() => {
@@ -136,6 +175,57 @@ export function FoodInput({ onFoodAdded }: FoodInputProps) {
     
     // Update use count on the favorite
     updateFavoriteUseCount(fp)
+  }
+
+  /** Select a product from the shared catalog (not yet in user's favorites) */
+  const handleSelectCatalogProduct = async (product: Product) => {
+    if (!user) return
+    // Add to parsed items with per-100g source
+    const base: Per100gBase = {
+      calories: product.calories,
+      protein: product.protein,
+      fat: product.fat,
+      carbs: product.carbs,
+    }
+    const scaled = scaleFromBase(base, product.weight)
+    const newItem: EditableFoodItem = {
+      name: product.name,
+      weight: product.weight,
+      ...scaled,
+      quantity: 1,
+      sourcePer100g: base,
+    }
+    setParsedItems(prev => prev ? [...prev, newItem] : [newItem])
+    setInput('')
+    setShowSuggestions(false)
+
+    // Link to user's favorites via server-side dedup
+    const result = await findOrCreateProduct(product, user.id)
+    const { product: p, favorite } = result
+    const newFav: FavoriteWithProduct = {
+      favoriteId: favorite.id,
+      productId: p.id,
+      name: p.name,
+      barcode: p.barcode,
+      weight: favorite.customWeight || p.weight,
+      calories: p.calories,
+      protein: p.protein,
+      fat: p.fat,
+      carbs: p.carbs,
+      useCount: favorite.useCount,
+      lastUsed: favorite.lastUsed,
+      createdBy: p.createdBy,
+      isFavorite: true,
+    }
+    setFavProducts(prev => {
+      const exists = prev.findIndex(f => f.productId === p.id)
+      if (exists >= 0) {
+        const updated = [...prev]
+        updated[exists] = newFav
+        return updated
+      }
+      return [newFav, ...prev]
+    })
   }
 
   const updateFavoriteUseCount = async (fp: FavoriteWithProduct) => {
@@ -448,31 +538,69 @@ export function FoodInput({ onFoodAdded }: FoodInputProps) {
             className="pr-10"
           />
           
-          {/* Autocomplete dropdown */}
-          {showSuggestions && (
-            <div className="absolute z-50 w-full mt-1 bg-background border rounded-lg shadow-lg overflow-hidden">
-              <div className="p-2 text-xs text-muted-foreground border-b flex items-center gap-1">
-                <Clock className="h-3 w-3" />
-                Из вашей истории
-              </div>
-              {filteredSuggestions.map((fp) => (
-                <button
-                  key={fp.favoriteId}
-                  onClick={() => handleSelectSuggestion(fp)}
-                  className="w-full px-3 py-3 sm:py-2 text-left hover:bg-muted flex items-center justify-between transition-colors"
-                >
-                  <div>
-                    <div className="font-medium">{fp.name}</div>
-                    <div className="text-xs text-muted-foreground">
-                      {fp.weight}г {' \u2022 '} {Math.round(fp.calories * fp.weight / 100)} ккал
-                    </div>
-                  </div>
-                  <div className="text-xs text-muted-foreground flex items-center gap-1">
+          {/* Autocomplete dropdown: favorites + shared catalog */}
+          {showSuggestions && (filteredFavorites.length > 0 || catalogResults.length > 0 || isCatalogSearching) && (
+            <div className="absolute z-50 w-full mt-1 bg-background border rounded-lg shadow-lg overflow-hidden max-h-80 overflow-y-auto">
+              {/* Section 1: User's favorites */}
+              {filteredFavorites.length > 0 && (
+                <>
+                  <div className="px-3 py-1.5 text-[11px] font-medium text-muted-foreground border-b bg-muted/30 flex items-center gap-1.5">
                     <Star className="h-3 w-3" />
-                    {fp.useCount}
+                    Избранное
                   </div>
-                </button>
-              ))}
+                  {filteredFavorites.map((fp) => (
+                    <button
+                      key={fp.favoriteId}
+                      onClick={() => handleSelectSuggestion(fp)}
+                      className="w-full px-3 py-2.5 sm:py-2 text-left hover:bg-muted flex items-center justify-between transition-colors"
+                    >
+                      <div>
+                        <div className="text-sm font-medium">{fp.name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {fp.weight}г {'\u00B7'} {Math.round(fp.calories * fp.weight / 100)} ккал
+                        </div>
+                      </div>
+                      <div className="text-[11px] text-muted-foreground flex items-center gap-1 tabular-nums">
+                        <Star className="h-3 w-3 fill-current text-amber-400" />
+                        {fp.useCount}
+                      </div>
+                    </button>
+                  ))}
+                </>
+              )}
+
+              {/* Section 2: Shared product catalog */}
+              {(catalogResults.length > 0 || isCatalogSearching) && (
+                <>
+                  <div className="px-3 py-1.5 text-[11px] font-medium text-muted-foreground border-b border-t bg-muted/30 flex items-center gap-1.5">
+                    <Globe className="h-3 w-3" />
+                    Общая база
+                    {isCatalogSearching && <Loader2 className="h-3 w-3 animate-spin ml-auto" />}
+                  </div>
+                  {catalogResults.map((product) => (
+                    <button
+                      key={product.id}
+                      onClick={() => handleSelectCatalogProduct(product)}
+                      className="w-full px-3 py-2.5 sm:py-2 text-left hover:bg-muted flex items-center justify-between transition-colors"
+                    >
+                      <div>
+                        <div className="text-sm font-medium">{product.name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {product.weight}г {'\u00B7'} {Math.round(product.calories * product.weight / 100)} ккал
+                        </div>
+                      </div>
+                      <div className="text-[11px] text-muted-foreground flex items-center gap-1">
+                        <Globe className="h-3 w-3" />
+                      </div>
+                    </button>
+                  ))}
+                  {isCatalogSearching && catalogResults.length === 0 && (
+                    <div className="px-3 py-2 text-xs text-muted-foreground text-center">
+                      Поиск...
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           )}
         </div>
