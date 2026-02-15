@@ -7,7 +7,6 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  ResponsiveContainer,
 } from 'recharts'
 import {
   Card,
@@ -86,34 +85,32 @@ export function WeightChart({ entries, profile }: WeightChartProps) {
           }}
           className="h-[200px]"
         >
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-              <XAxis
-                dataKey="date"
-                tick={{ fontSize: 12 }}
-                tickLine={false}
-                axisLine={false}
-              />
-              <YAxis
-                domain={['dataMin - 2', 'dataMax + 2']}
-                tick={{ fontSize: 12 }}
-                tickLine={false}
-                axisLine={false}
-                width={40}
-              />
-              <ChartTooltip content={<ChartTooltipContent />} />
-              <Line
-                type="natural"
-                dataKey="weight"
-                stroke="var(--color-weight)"
-                strokeWidth={3}
-                dot={{ fill: 'var(--color-weight)', strokeWidth: 2, r: 4 }}
-                activeDot={{ r: 6 }}
-                connectNulls
-              />
-            </LineChart>
-          </ResponsiveContainer>
+          <LineChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+            <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+            <XAxis
+              dataKey="date"
+              tick={{ fontSize: 12 }}
+              tickLine={false}
+              axisLine={false}
+            />
+            <YAxis
+              domain={['dataMin - 2', 'dataMax + 2']}
+              tick={{ fontSize: 12 }}
+              tickLine={false}
+              axisLine={false}
+              width={40}
+            />
+            <ChartTooltip content={<ChartTooltipContent />} />
+            <Line
+              type="natural"
+              dataKey="weight"
+              stroke="var(--color-weight)"
+              strokeWidth={3}
+              dot={{ fill: 'var(--color-weight)', strokeWidth: 2, r: 4 }}
+              activeDot={{ r: 6 }}
+              connectNulls
+            />
+          </LineChart>
         </ChartContainer>
       </CardContent>
     </Card>

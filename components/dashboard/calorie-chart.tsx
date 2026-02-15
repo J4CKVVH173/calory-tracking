@@ -6,7 +6,6 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  ResponsiveContainer,
 } from 'recharts'
 import {
   Card,
@@ -82,30 +81,28 @@ export function CalorieChart({ logs }: CalorieChartProps) {
           }}
           className="h-[200px]"
         >
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" className="stroke-muted" vertical={false} />
-              <XAxis
-                dataKey="date"
-                tick={{ fontSize: 11 }}
-                tickLine={false}
-                axisLine={false}
-              />
-              <YAxis
-                domain={[0, maxCalories + 200]}
-                tick={{ fontSize: 12 }}
-                tickLine={false}
-                axisLine={false}
-                width={45}
-              />
-              <ChartTooltip content={<ChartTooltipContent />} />
-              <Bar
-                dataKey="calories"
-                fill="var(--color-calories)"
-                radius={[4, 4, 0, 0]}
-              />
-            </BarChart>
-          </ResponsiveContainer>
+          <BarChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
+            <CartesianGrid strokeDasharray="3 3" className="stroke-muted" vertical={false} />
+            <XAxis
+              dataKey="date"
+              tick={{ fontSize: 11 }}
+              tickLine={false}
+              axisLine={false}
+            />
+            <YAxis
+              domain={[0, maxCalories + 200]}
+              tick={{ fontSize: 12 }}
+              tickLine={false}
+              axisLine={false}
+              width={45}
+            />
+            <ChartTooltip content={<ChartTooltipContent />} />
+            <Bar
+              dataKey="calories"
+              fill="var(--color-calories)"
+              radius={[4, 4, 0, 0]}
+            />
+          </BarChart>
         </ChartContainer>
       </CardContent>
     </Card>
