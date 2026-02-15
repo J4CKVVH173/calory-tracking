@@ -83,7 +83,7 @@ export function WeightChart({ entries, profile }: WeightChartProps) {
               color: 'hsl(var(--chart-1))',
             },
           }}
-          className="h-[200px]"
+          className="h-[200px] w-full"
         >
           <LineChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />

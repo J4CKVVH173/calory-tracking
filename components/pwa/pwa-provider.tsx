@@ -21,13 +21,35 @@ export function PWAProvider() {
       navigator.serviceWorker
         .register('/sw.js')
         .then((registration) => {
+          // Check for updates periodically
           setInterval(() => {
             registration.update()
-          }, 60 * 60 * 1000)
+          }, 30 * 60 * 1000) // every 30 minutes
+
+          // Listen for new SW waiting to activate
+          registration.addEventListener('updatefound', () => {
+            const newWorker = registration.installing
+            if (!newWorker) return
+            newWorker.addEventListener('statechange', () => {
+              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                // New version available, tell it to activate immediately
+                newWorker.postMessage('skipWaiting')
+              }
+            })
+          })
         })
         .catch((err) => {
           console.error('SW registration failed:', err)
         })
+
+      // Reload page when new SW takes over
+      let refreshing = false
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!refreshing) {
+          refreshing = true
+          window.location.reload()
+        }
+      })
     }
 
     // Check if already in standalone mode
