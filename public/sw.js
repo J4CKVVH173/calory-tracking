@@ -1,8 +1,11 @@
-const CACHE_VERSION = 'v3'
+const CACHE_VERSION = 'v4'
 const STATIC_CACHE = `kaloritrack-static-${CACHE_VERSION}`
 const PAGES_CACHE = `kaloritrack-pages-${CACHE_VERSION}`
 const DATA_CACHE = `kaloritrack-data-${CACHE_VERSION}`
 const ALL_CACHES = [STATIC_CACHE, PAGES_CACHE, DATA_CACHE]
+
+// Background Sync tag
+const SYNC_TAG = 'kaloritrack-sync'
 
 // App shell pages to precache for offline navigation
 const APP_SHELL_PAGES = [
@@ -26,7 +29,6 @@ const PRECACHE_STATIC = [
 self.addEventListener('install', (event) => {
   event.waitUntil(
     Promise.all([
-      // Precache pages individually (don't fail all if one fails)
       caches.open(PAGES_CACHE).then((cache) =>
         Promise.allSettled(
           APP_SHELL_PAGES.map((url) =>
@@ -34,11 +36,10 @@ self.addEventListener('install', (event) => {
               .then((res) => {
                 if (res.ok) return cache.put(url, res)
               })
-              .catch(() => {}) // Silently skip failed pages
+              .catch(() => {})
           )
         )
       ),
-      // Precache static assets
       caches.open(STATIC_CACHE).then((cache) =>
         Promise.allSettled(
           PRECACHE_STATIC.map((url) =>
@@ -76,19 +77,22 @@ self.addEventListener('fetch', (event) => {
   const { request } = event
   const url = new URL(request.url)
 
-  // Skip non-GET, non-http(s), and browser extensions
-  if (request.method !== 'GET') return
+  // Skip non-http(s) and browser extensions
   if (!url.protocol.startsWith('http')) return
 
-  // --- Strategy 1: API data routes --- 
-  // Network-first, cache the latest response for offline reads
+  // ── Non-GET requests (POST/DELETE): let through, don't intercept ──
+  // The client-side offline layer (api-storage + sync-manager) handles
+  // queueing mutations in IndexedDB. We don't intercept writes here
+  // because the client needs the response body for optimistic updates.
+  if (request.method !== 'GET') return
+
+  // ── GET /api/data: network-first with data cache ──
   if (url.pathname.startsWith('/api/data')) {
-    event.respondWith(networkFirstWithDataCache(request))
+    event.respondWith(networkFirstData(request))
     return
   }
 
-  // --- Strategy 2: Other API routes --- 
-  // Network-only (auth, AI parsing, etc.)
+  // ── Other API routes: network-only (auth, AI parsing, barcode) ──
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(
       fetch(request).catch(() =>
@@ -101,34 +105,31 @@ self.addEventListener('fetch', (event) => {
     return
   }
 
-  // --- Strategy 3: Next.js static chunks (_next/static) ---
-  // Cache-first (these are content-hashed, immutable)
+  // ── Next.js static chunks (_next/static): cache-first (immutable) ──
   if (url.pathname.startsWith('/_next/static')) {
     event.respondWith(cacheFirstImmutable(request, STATIC_CACHE))
     return
   }
 
-  // --- Strategy 4: Static assets (images, fonts, icons) ---
-  // Stale-while-revalidate
+  // ── Static assets: stale-while-revalidate ──
   if (url.pathname.match(/\.(js|css|png|jpg|jpeg|svg|gif|webp|woff2?|ttf|ico|mp3|glb|gltf)$/)) {
     event.respondWith(staleWhileRevalidate(request, STATIC_CACHE))
     return
   }
 
-  // --- Strategy 5: Page navigations ---
-  // Network-first with cached fallback
+  // ── Page navigations: network-first with offline shell fallback ──
   if (request.mode === 'navigate' || request.headers.get('accept')?.includes('text/html')) {
     event.respondWith(networkFirstPage(request))
     return
   }
 
-  // --- Default: stale-while-revalidate ---
+  // ── Default: stale-while-revalidate ──
   event.respondWith(staleWhileRevalidate(request, STATIC_CACHE))
 })
 
 // ─── Strategy implementations ───
 
-async function networkFirstWithDataCache(request) {
+async function networkFirstData(request) {
   const cache = await caches.open(DATA_CACHE)
   try {
     const response = await fetch(request)
@@ -150,12 +151,9 @@ async function cacheFirstImmutable(request, cacheName) {
   const cache = await caches.open(cacheName)
   const cached = await cache.match(request)
   if (cached) return cached
-
   try {
     const response = await fetch(request)
-    if (response.ok) {
-      cache.put(request, response.clone())
-    }
+    if (response.ok) cache.put(request, response.clone())
     return response
   } catch {
     return new Response('Offline', { status: 503 })
@@ -165,18 +163,12 @@ async function cacheFirstImmutable(request, cacheName) {
 async function staleWhileRevalidate(request, cacheName) {
   const cache = await caches.open(cacheName)
   const cached = await cache.match(request)
-
-  // Fire off revalidation in background
   const fetchPromise = fetch(request)
     .then((response) => {
-      if (response.ok) {
-        cache.put(request, response.clone())
-      }
+      if (response.ok) cache.put(request, response.clone())
       return response
     })
     .catch(() => null)
-
-  // Return cached immediately, or wait for network
   if (cached) return cached
   const response = await fetchPromise
   return response || new Response('Offline', { status: 503 })
@@ -186,31 +178,60 @@ async function networkFirstPage(request) {
   const cache = await caches.open(PAGES_CACHE)
   try {
     const response = await fetch(request)
-    if (response.ok) {
-      cache.put(request, response.clone())
-    }
+    if (response.ok) cache.put(request, response.clone())
     return response
   } catch {
-    // Try exact URL match
     const cached = await cache.match(request)
     if (cached) return cached
-
-    // Try matching just the pathname (for navigations with query params)
     const url = new URL(request.url)
     const pathCached = await cache.match(url.pathname)
     if (pathCached) return pathCached
-
-    // Fallback to dashboard as the offline shell
     const fallback = await cache.match('/dashboard')
     if (fallback) return fallback
-
-    // Last resort: offline HTML
     return new Response(offlineHTML(), {
       status: 200,
       headers: { 'Content-Type': 'text/html; charset=utf-8' },
     })
   }
 }
+
+// ─── Background Sync API ───
+// When the browser regains connectivity, it fires this event.
+// We notify all clients so the sync manager can process the queue.
+
+self.addEventListener('sync', (event) => {
+  if (event.tag === SYNC_TAG) {
+    event.waitUntil(notifyClientsToSync())
+  }
+})
+
+async function notifyClientsToSync() {
+  const clients = await self.clients.matchAll({ type: 'window' })
+  for (const client of clients) {
+    client.postMessage({ type: 'SW_SYNC_TRIGGER' })
+  }
+}
+
+// ─── Messages from client ───
+
+self.addEventListener('message', (event) => {
+  if (event.data === 'skipWaiting') {
+    self.skipWaiting()
+  }
+  if (event.data === 'clearCaches') {
+    caches.keys().then((names) =>
+      Promise.all(names.map((name) => caches.delete(name)))
+    )
+  }
+  // Client requests a Background Sync registration
+  if (event.data === 'registerSync') {
+    if (self.registration.sync) {
+      self.registration.sync.register(SYNC_TAG).catch(() => {})
+    }
+  }
+})
+
+// ─── Offline fallback HTML ───
 
 function offlineHTML() {
   return `<!DOCTYPE html>
@@ -223,7 +244,6 @@ function offlineHTML() {
     *{margin:0;padding:0;box-sizing:border-box}
     body{font-family:system-ui,-apple-system,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f8fafc;color:#1e293b;padding:1rem}
     .c{text-align:center;max-width:360px}
-    .icon{font-size:3rem;margin-bottom:1rem}
     h1{font-size:1.25rem;font-weight:600;margin-bottom:0.5rem}
     p{color:#64748b;font-size:0.875rem;line-height:1.5;margin-bottom:1.5rem}
     button{background:#3b82f6;color:#fff;border:none;padding:0.625rem 1.25rem;border-radius:0.5rem;font-size:0.875rem;font-weight:500;cursor:pointer}
@@ -232,25 +252,10 @@ function offlineHTML() {
 </head>
 <body>
   <div class="c">
-    <div class="icon">&#128268;</div>
     <h1>Нет подключения</h1>
-    <p>Приложение не может загрузить данные. Проверьте интернет-соединение и попробуйте снова.</p>
+    <p>Ваши данные сохранены локально и будут синхронизированы при восстановлении соединения.</p>
     <button onclick="location.reload()">Повторить</button>
   </div>
 </body>
 </html>`
 }
-
-// ─── Background sync for offline writes ───
-
-self.addEventListener('message', (event) => {
-  if (event.data === 'skipWaiting') {
-    self.skipWaiting()
-  }
-  // Allow manual cache clear
-  if (event.data === 'clearCaches') {
-    caches.keys().then((names) =>
-      Promise.all(names.map((name) => caches.delete(name)))
-    )
-  }
-})

@@ -5,6 +5,7 @@ import { Analytics } from '@vercel/analytics/next'
 import { AuthProvider } from '@/lib/auth-context'
 import { Navigation } from '@/components/layout/navigation'
 import { PWAProvider } from '@/components/pwa/pwa-provider'
+import { OfflineIndicator } from '@/components/pwa/offline-indicator'
 import './globals.css'
 
 const _geist = Geist({ subsets: ["latin"] });
@@ -62,6 +63,7 @@ export default function RootLayout({
         <AuthProvider>
           <Navigation />
           <main>{children}</main>
+          <OfflineIndicator />
           <PWAProvider />
         </AuthProvider>
         <Analytics />

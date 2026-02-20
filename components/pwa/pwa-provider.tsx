@@ -26,6 +26,12 @@ export function PWAProvider() {
             registration.update()
           }, 30 * 60 * 1000) // every 30 minutes
 
+          // Register Background Sync for offline mutations
+          if ('sync' in registration) {
+            (registration as unknown as { sync: { register: (tag: string) => Promise<void> } })
+              .sync.register('kaloritrack-sync').catch(() => {})
+          }
+
           // Listen for new SW waiting to activate
           registration.addEventListener('updatefound', () => {
             const newWorker = registration.installing
